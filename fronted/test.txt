@@ -1,0 +1,3862 @@
+also i want you to make this more easy to understand minimize my code if possible in simple also keep my functionality ok
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  GoogleMap,
+  InfoWindow,
+  Marker,
+  Polyline,
+  useJsApiLoader,
+} from "@react-google-maps/api";
+import { useParams, useSearchParams } from "react-router-dom";
+import {
+  ArrowLeft,
+  Car,
+  Crosshair,
+  LocateFixed,
+  MapPin,
+  Navigation,
+  RefreshCw,
+  Route as RouteIcon,
+  Search,
+  Star,
+  X,
+} from "lucide-react";
+
+import { getPlaces } from "../lib/api";
+
+const GOOGLE_MAPS_LIBRARIES = ["routes"];
+
+const MAP_CONTAINER_STYLE = {
+  width: "100%",
+  height: "100%",
+};
+
+const DEFAULT_CENTER = {
+  lat: 27.5291,
+  lng: 84.3542,
+};
+
+const OFF_ROUTE_DISTANCE_METERS = 150;
+const MAX_NEARBY_PLACES = 10;
+const GPS_TIMEOUT = 15000;
+const GPS_MAX_AGE = 5000;
+const GPS_ENABLE_HIGH_ACCURACY = true;
+
+const CATEGORY_LIST = [
+  "All",
+  "Nature",
+  "Temple",
+  "Adventure",
+  "Culture",
+  "Restaurant",
+  "Hotel",
+  "Homestay",
+  "Viewpoint",
+];
+
+const cleanText = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+const isValidCoordinate = (lat, lng) =>
+  Number.isFinite(Number(lat)) &&
+  Number.isFinite(Number(lng)) &&
+  Number(lat) >= -90 &&
+  Number(lat) <= 90 &&
+  Number(lng) >= -180 &&
+  Number(lng) <= 180;
+
+const getPlaceCoordinate = (place) => {
+  if (!place) return null;
+
+  const directLat = Number(place.latitude ?? place.lat);
+  const directLng = Number(place.longitude ?? place.lng);
+
+  if (isValidCoordinate(directLat, directLng)) {
+    return {
+      lat: directLat,
+      lng: directLng,
+    };
+  }
+
+  if (
+    place.coordinates &&
+    typeof place.coordinates === "object" &&
+    !Array.isArray(place.coordinates)
+  ) {
+    const lat = Number(place.coordinates.latitude ?? place.coordinates.lat);
+    const lng = Number(place.coordinates.longitude ?? place.coordinates.lng);
+
+    if (isValidCoordinate(lat, lng)) {
+      return { lat, lng };
+    }
+  }
+
+  if (
+    place.locationPoint?.coordinates &&
+    Array.isArray(place.locationPoint.coordinates)
+  ) {
+    const [lng, lat] = place.locationPoint.coordinates.map(Number);
+
+    if (isValidCoordinate(lat, lng)) {
+      return {
+        lat,
+        lng,
+      };
+    }
+  }
+
+  if (
+    place.location?.coordinates &&
+    Array.isArray(place.location.coordinates)
+  ) {
+    const [lng, lat] = place.location.coordinates.map(Number);
+
+    if (isValidCoordinate(lat, lng)) {
+      return {
+        lat,
+        lng,
+      };
+    }
+  }
+
+  return null;
+};
+
+const getPlaceKey = (place) =>
+  place?._id || place?.id || place?.slug || place?.googlePlaceId || place?.name;
+
+const getCategoryName = (category) => {
+  if (!category) return "";
+
+  if (typeof category === "string") {
+    return category.trim();
+  }
+
+  if (typeof category === "object") {
+    return String(
+      category.name || category.title || category.label || category.slug || "",
+    ).trim();
+  }
+
+  return "";
+};
+
+const getPlaceCategories = (place) => {
+  const category = place?.category;
+
+  const values = Array.isArray(category)
+    ? category
+    : category
+      ? [category]
+      : [];
+
+  return values.map(getCategoryName).filter(Boolean);
+};
+
+const getPlaceCategory = (place) => {
+  return getPlaceCategories(place)[0] || "Other";
+};
+
+const getCategoryIcon = (category) => {
+  const value = cleanText(category).toLowerCase();
+
+  if (value.includes("temple")) return "🛕";
+  if (value.includes("nature")) return "🌿";
+  if (value.includes("adventure")) return "🦋";
+  if (value.includes("culture")) return "🏛️";
+  if (value.includes("restaurant")) return "🍽️";
+  if (value.includes("hotel")) return "🏨";
+  if (value.includes("homestay")) return "🏡";
+  if (value.includes("view")) return "🌅";
+
+  return "📍";
+};
+
+const haversineDistanceMeters = (a, b) => {
+  if (!a || !b) return Infinity;
+
+  const R = 6371000;
+
+  const lat1 = (Number(a.lat) * Math.PI) / 180;
+  const lat2 = (Number(b.lat) * Math.PI) / 180;
+
+  const deltaLat = ((Number(b.lat) - Number(a.lat)) * Math.PI) / 180;
+
+  const deltaLng = ((Number(b.lng) - Number(a.lng)) * Math.PI) / 180;
+
+  const x =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+
+  return R * c;
+};
+
+const formatDistance = (meters) => {
+  if (!Number.isFinite(Number(meters))) return "--";
+
+  const value = Number(meters);
+
+  if (value < 1000) {
+    return `${Math.round(value)} m`;
+  }
+
+  return `${(value / 1000).toFixed(1)} km`;
+};
+
+const formatDuration = (seconds) => {
+  if (!Number.isFinite(Number(seconds))) return "--";
+
+  const totalMinutes = Math.max(1, Math.round(Number(seconds) / 60));
+
+  if (totalMinutes < 60) {
+    return `${totalMinutes} min`;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (!minutes) {
+    return `${hours} hr`;
+  }
+
+  return `${hours} hr ${minutes} min`;
+};
+
+const getClosestPointOnSegment = (point, start, end) => {
+  const x = Number(point.lng);
+  const y = Number(point.lat);
+
+  const x1 = Number(start.lng);
+  const y1 = Number(start.lat);
+
+  const x2 = Number(end.lng);
+  const y2 = Number(end.lat);
+
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+
+  if (dx === 0 && dy === 0) {
+    return {
+      lat: y1,
+      lng: x1,
+    };
+  }
+
+  const t = Math.max(
+    0,
+    Math.min(1, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)),
+  );
+
+  return {
+    lat: y1 + t * dy,
+    lng: x1 + t * dx,
+  };
+};
+
+const getClosestRoutePosition = (position, path) => {
+  if (!position || !Array.isArray(path) || path.length < 2) {
+    return {
+      distance: Infinity,
+      index: 0,
+      point: null,
+    };
+  }
+
+  let closestDistance = Infinity;
+  let closestIndex = 0;
+  let closestPoint = null;
+
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const point = getClosestPointOnSegment(position, path[i], path[i + 1]);
+
+    const distance = haversineDistanceMeters(position, point);
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestIndex = i;
+      closestPoint = point;
+    }
+  }
+
+  return {
+    distance: closestDistance,
+    index: closestIndex,
+    point: closestPoint,
+  };
+};
+
+const convertGooglePath = (path) => {
+  if (!Array.isArray(path)) return [];
+
+  return path
+    .map((point) => {
+      const lat =
+        typeof point?.lat === "function" ? point.lat() : Number(point?.lat);
+
+      const lng =
+        typeof point?.lng === "function" ? point.lng() : Number(point?.lng);
+
+      return {
+        lat,
+        lng,
+      };
+    })
+    .filter((point) => isValidCoordinate(point.lat, point.lng));
+};
+
+const getRouteLabel = (route, index) => {
+  if (index === 0) return "Recommended";
+
+  if (
+    route?.routeLabels?.some((label) =>
+      String(label).toLowerCase().includes("shorter"),
+    )
+  ) {
+    return "Shorter route";
+  }
+
+  return `Alternative ${index}`;
+};
+
+const getRouteMetrics = (route) => {
+  if (!route) {
+    return {
+      distance: 0,
+      duration: 0,
+    };
+  }
+
+  return {
+    distance: Number(route.distanceMeters || 0),
+    duration: Number(route.durationMillis || 0) / 1000,
+  };
+};
+
+async function getGoogleRoutes(origin, destination) {
+  if (!origin || !destination) {
+    throw new Error("Origin and destination are required.");
+  }
+
+  if (!window.google?.maps) {
+    throw new Error("Google Maps has not finished loading.");
+  }
+
+  const { Route } = await window.google.maps.importLibrary("routes");
+
+  if (!Route?.computeRoutes) {
+    throw new Error("Google Routes Library is not available.");
+  }
+
+  const request = {
+    origin: {
+      lat: Number(origin.lat),
+      lng: Number(origin.lng),
+    },
+
+    destination: {
+      lat: Number(destination.lat),
+      lng: Number(destination.lng),
+    },
+
+    travelMode: "DRIVING",
+
+    routingPreference: "TRAFFIC_AWARE",
+
+    computeAlternativeRoutes: false,
+
+    language: "en",
+
+    units: google.maps.UnitSystem.METRIC,
+
+    polylineQuality: "HIGH_QUALITY",
+
+    fields: [
+      "distanceMeters",
+      "durationMillis",
+      "staticDurationMillis",
+      "path",
+      "legs",
+      "description",
+      "routeLabels",
+      "warnings",
+    ],
+  };
+
+  console.log("🛣️ Google Routes request:", request);
+
+  const response = await Route.computeRoutes(request);
+
+  const googleRoutes = response?.routes || [];
+
+  console.log("🛣️ Google Routes returned:", googleRoutes.length);
+
+  if (!googleRoutes.length) {
+    throw new Error("Google could not find a route between these locations.");
+  }
+
+  return googleRoutes.slice(0).map((googleRoute, index) => {
+    const path = convertGooglePath(googleRoute.path);
+
+    return {
+      id: `google-route-${index}`,
+      index,
+      path,
+      distanceMeters: Number(googleRoute.distanceMeters || 0),
+      durationMillis: Number(
+        googleRoute.durationMillis || googleRoute.staticDurationMillis || 0,
+      ),
+      distance: Number(googleRoute.distanceMeters || 0),
+      duration:
+        Number(
+          googleRoute.durationMillis || googleRoute.staticDurationMillis || 0,
+        ) / 1000,
+      description: googleRoute.description || "",
+      routeLabels: googleRoute.routeLabels || [],
+      warnings: googleRoute.warnings || [],
+      legs: googleRoute.legs || [],
+      googleRoute,
+    };
+  });
+}
+
+const Placemap = () => {
+  const { id: routeId } = useParams();
+  const [searchParams] = useSearchParams();
+
+  const queryId = searchParams.get("id");
+
+  const placeId = routeId || queryId;
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: "bharatpur-google-map",
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
+
+  const [places, setPlaces] = useState([]);
+
+  const [destinationPlace, setDestinationPlace] = useState(null);
+
+  const [navigationPlace, setNavigationPlace] = useState(null);
+
+  const [position, setPosition] = useState(null);
+
+  const [routes, setRoutes] = useState([]);
+
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+
+  const [loadingPlace, setLoadingPlace] = useState(true);
+
+  const [loadingPlaces, setLoadingPlaces] = useState(false);
+
+  const [loadingRoute, setLoadingRoute] = useState(false);
+
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const [navigationError, setNavigationError] = useState("");
+
+  const [offRoute, setOffRoute] = useState(false);
+
+  const [gpsError, setGpsError] = useState("");
+
+  const [speed, setSpeed] = useState(0);
+
+  const [category, setCategory] = useState("All");
+
+  const categoryOptions = useMemo(() => {
+    const names = new Map();
+
+    CATEGORY_LIST.slice(1).forEach((item) => {
+      names.set(item.toLowerCase(), item);
+    });
+
+    places.forEach((place) => {
+      getPlaceCategories(place).forEach((item) => {
+        const key = item.toLowerCase();
+        if (!names.has(key)) {
+          names.set(key, item);
+        }
+      });
+    });
+
+    return [
+      "All",
+      ...Array.from(names.values()).sort((a, b) => a.localeCompare(b)),
+    ];
+  }, [places]);
+
+  const [search, setSearch] = useState("");
+
+  const [selectedPlace, setSelectedPlace] = useState(null);
+
+  const [map, setMap] = useState(null);
+
+  const [showOtherPlaces, setShowOtherPlaces] = useState(true);
+
+  const [recalculating, setRecalculating] = useState(false);
+
+  const watchIdRef = useRef(null);
+
+  const lastPositionRef = useRef(null);
+  const lastPositionTimestampRef = useRef(null);
+
+  const lastRouteCalculationRef = useRef(0);
+
+  const navigationDestination = useMemo(
+    () =>
+      navigationPlace
+        ? getPlaceCoordinate(navigationPlace)
+        : destinationPlace
+          ? getPlaceCoordinate(destinationPlace)
+          : null,
+    [navigationPlace, destinationPlace],
+  );
+
+  const selectedRoute = routes[selectedRouteIndex] || routes[0] || null;
+
+  const loadPlaces = useCallback(async () => {
+    try {
+      setLoadingPlaces(true);
+
+      const response = await getPlaces();
+
+      const loadedPlaces = response?.places || response?.data || response || [];
+
+      const list = Array.isArray(loadedPlaces) ? loadedPlaces : [];
+
+      setPlaces(list);
+
+      return list;
+    } catch (error) {
+      console.error("LOAD PLACES ERROR:", error);
+
+      return [];
+    } finally {
+      setLoadingPlaces(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const loadDestination = async () => {
+      if (!placeId) {
+        setLoadingPlace(false);
+        return;
+      }
+
+      try {
+        setLoadingPlace(true);
+
+        const list = await loadPlaces();
+
+        const found = list.find(
+          (item) =>
+            String(item._id) === String(placeId) ||
+            String(item.id) === String(placeId) ||
+            String(item.slug) === String(placeId),
+        );
+
+        if (!found) {
+          throw new Error("Destination place was not found.");
+        }
+
+        setDestinationPlace(found);
+      } catch (error) {
+        console.error("DESTINATION ERROR:", error);
+
+        setNavigationError(error.message || "Unable to load destination.");
+      } finally {
+        setLoadingPlace(false);
+      }
+    };
+
+    loadDestination();
+  }, [placeId, loadPlaces]);
+
+  useEffect(() => {
+    if (!places.length) {
+      loadPlaces();
+    }
+  }, [places.length, loadPlaces]);
+
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setGpsError("Geolocation is not supported by this browser.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (location) => {
+        const nextPosition = {
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+        };
+
+        setPosition(nextPosition);
+
+        if (
+          Number.isFinite(location.coords.speed) &&
+          location.coords.speed >= 0
+        ) {
+          setSpeed(location.coords.speed);
+        }
+
+        lastPositionRef.current = nextPosition;
+        lastPositionTimestampRef.current = location.timestamp;
+
+        setGpsError("");
+      },
+      (error) => {
+        console.error("GPS ERROR:", error);
+
+        setGpsError(error.message || "Unable to get your location.");
+      },
+      {
+        enableHighAccuracy: GPS_ENABLE_HIGH_ACCURACY,
+        timeout: GPS_TIMEOUT,
+        maximumAge: GPS_MAX_AGE,
+      },
+    );
+  }, []);
+
+  useEffect(() => {
+    requestLocation();
+  }, [requestLocation]);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (location) => {
+        const nextPosition = {
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+        };
+
+        const previous = lastPositionRef.current;
+        const previousTimestamp = lastPositionTimestampRef.current;
+
+        if (
+          previous &&
+          Number.isFinite(previousTimestamp) &&
+          (!Number.isFinite(location.coords.speed) || location.coords.speed < 0)
+        ) {
+          const distance = haversineDistanceMeters(previous, nextPosition);
+
+          const timeSeconds = Math.max(
+            1,
+            (location.timestamp - previousTimestamp) / 1000,
+          );
+
+          if (Number.isFinite(distance)) {
+            const calculatedSpeed =
+              distance / Math.max(1, Math.abs(timeSeconds));
+
+            if (calculatedSpeed <= 55) {
+              setSpeed(calculatedSpeed);
+            }
+          }
+        } else if (
+          Number.isFinite(location.coords.speed) &&
+          location.coords.speed >= 0
+        ) {
+          setSpeed(location.coords.speed);
+        }
+
+        setPosition(nextPosition);
+
+        lastPositionRef.current = nextPosition;
+        lastPositionTimestampRef.current = location.timestamp;
+
+        setGpsError("");
+      },
+      (error) => {
+        console.error("GPS WATCH ERROR:", error);
+
+        setGpsError(error.message || "Unable to track your location.");
+      },
+      {
+        enableHighAccuracy: GPS_ENABLE_HIGH_ACCURACY,
+        timeout: GPS_TIMEOUT,
+        maximumAge: GPS_MAX_AGE,
+      },
+    );
+
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
+
+  const calculateRoute = useCallback(
+    async (origin = position, destination = navigationDestination) => {
+      if (!origin || !destination) {
+        return;
+      }
+
+      try {
+        setLoadingRoute(true);
+        setNavigationError("");
+        setOffRoute(false);
+
+        const now = Date.now();
+
+        if (now - lastRouteCalculationRef.current < 1000) {
+          return;
+        }
+
+        lastRouteCalculationRef.current = now;
+
+        const newRoutes = await getGoogleRoutes(origin, destination);
+
+        setRoutes(newRoutes);
+
+        setSelectedRouteIndex(0);
+
+        console.log("✅ Routes loaded:", newRoutes);
+      } catch (error) {
+        console.error("ROUTE ERROR:", error);
+
+        setNavigationError(error?.message || "Unable to calculate route.");
+      } finally {
+        setLoadingRoute(false);
+      }
+    },
+    [position, navigationDestination],
+  );
+
+  const startNavigation = useCallback(
+    async (place = destinationPlace) => {
+      const destination = getPlaceCoordinate(place);
+
+      if (!destination) {
+        setNavigationError("This place does not have valid coordinates.");
+        return;
+      }
+
+      if (!position) {
+        requestLocation();
+
+        setNavigationError("Waiting for your current location...");
+
+        return;
+      }
+
+      setNavigationPlace(place);
+      setIsNavigating(true);
+      setNavigationError("");
+      setOffRoute(false);
+
+      await calculateRoute(position, destination);
+    },
+    [destinationPlace, position, requestLocation, calculateRoute],
+  );
+
+  const startPlaceNavigation = async (place) => {
+    if (!place) return;
+
+    setSelectedPlace(null);
+
+    await startNavigation(place);
+  };
+
+  const stopNavigation = () => {
+    setIsNavigating(false);
+
+    setNavigationPlace(null);
+
+    setRoutes([]);
+
+    setSelectedRouteIndex(0);
+
+    setOffRoute(false);
+
+    setNavigationError("");
+  };
+
+  const recalculateRoute = async () => {
+    if (!position || !navigationDestination) {
+      return;
+    }
+
+    try {
+      setRecalculating(true);
+
+      await calculateRoute(position, navigationDestination);
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isNavigating || !position || !selectedRoute?.path?.length) {
+      return;
+    }
+
+    const closest = getClosestRoutePosition(position, selectedRoute.path);
+
+    const isOffRoute = closest.distance > OFF_ROUTE_DISTANCE_METERS;
+
+    setOffRoute(isOffRoute);
+  }, [position, selectedRoute, isNavigating]);
+
+  useEffect(() => {
+    if (!isNavigating || !offRoute || !position || !navigationDestination) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      calculateRoute(position, navigationDestination);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [offRoute, isNavigating, position, navigationDestination, calculateRoute]);
+
+  const routeProgress = useMemo(() => {
+    if (!position || !selectedRoute?.path?.length) {
+      return 0;
+    }
+
+    const closest = getClosestRoutePosition(position, selectedRoute.path);
+
+    if (closest.index < 0 || selectedRoute.path.length <= 1) {
+      return 0;
+    }
+
+    return Math.min(
+      100,
+      Math.max(0, (closest.index / (selectedRoute.path.length - 1)) * 100),
+    );
+  }, [position, selectedRoute]);
+
+  const currentRouteMetrics = useMemo(
+    () => getRouteMetrics(selectedRoute),
+    [selectedRoute],
+  );
+
+  const destinationDistance = useMemo(() => {
+    if (!position || !navigationDestination) {
+      return 0;
+    }
+
+    return haversineDistanceMeters(position, navigationDestination);
+  }, [position, navigationDestination]);
+
+  const nearbyPlaces = useMemo(() => {
+    const validPlaces = places.filter(
+      (place) => place && typeof place === "object",
+    );
+
+    const filtered = validPlaces
+      .filter((place) => getPlaceKey(place) !== getPlaceKey(destinationPlace))
+      .filter((place) => {
+        if (category === "All") return true;
+
+        return getPlaceCategories(place).some((item) =>
+          cleanText(item)
+            .toLowerCase()
+            .includes(cleanText(category).toLowerCase()),
+        );
+      })
+      .filter((place) => {
+        if (!search.trim()) return true;
+
+        const text = [
+          place.name,
+          place.location,
+          place.formattedAddress,
+          place.description,
+          ...getPlaceCategories(place),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return text.includes(search.toLowerCase());
+      });
+
+    if (!position) {
+      return filtered.slice(0, MAX_NEARBY_PLACES).map((place) => ({
+        place,
+        distance: 0,
+      }));
+    }
+
+    return filtered
+      .map((place) => {
+        const coordinate = getPlaceCoordinate(place);
+
+        if (!coordinate) return null;
+
+        return {
+          place,
+          distance: haversineDistanceMeters(position, coordinate),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, MAX_NEARBY_PLACES);
+  }, [places, position, category, search, destinationPlace]);
+
+  const center = useMemo(() => {
+    if (position) return position;
+
+    return getPlaceCoordinate(destinationPlace) || DEFAULT_CENTER;
+  }, [position, destinationPlace]);
+
+  const handleMapLoad = (mapInstance) => {
+    setMap(mapInstance);
+  };
+
+  const centerOnUser = () => {
+    if (!position) {
+      requestLocation();
+      return;
+    }
+
+    map?.panTo(position);
+    map?.setZoom(17);
+  };
+
+  const centerOnDestination = () => {
+    const coordinate = getPlaceCoordinate(navigationPlace || destinationPlace);
+
+    if (!coordinate) return;
+
+    map?.panTo(coordinate);
+    map?.setZoom(16);
+  };
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
+        <div className="max-w-lg rounded-2xl bg-white p-8 text-center shadow-xl">
+          <MapPin className="mx-auto mb-4 text-red-500" size={42} />
+
+          <h2 className="text-xl font-bold text-slate-900">
+            Google Maps failed to load
+          </h2>
+
+          <p className="mt-2 text-sm text-slate-600">
+            Check your Google Maps API key, Maps JavaScript API and Routes API.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoaded || loadingPlace) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
+
+          <p className="text-sm font-medium text-slate-600">
+            Loading Bharatpur map...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-screen w-full overflow-hidden bg-slate-100">
+      <GoogleMap
+        mapContainerStyle={MAP_CONTAINER_STYLE}
+        center={center}
+        zoom={14}
+        onLoad={handleMapLoad}
+        options={{
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: false,
+          zoomControl: true,
+          clickableIcons: true,
+        }}
+      >
+        {destinationPlace && getPlaceCoordinate(destinationPlace) && (
+          <Marker
+            position={getPlaceCoordinate(destinationPlace)}
+            title={destinationPlace.name}
+          />
+        )}
+
+        {navigationPlace &&
+          navigationPlace !== destinationPlace &&
+          getPlaceCoordinate(navigationPlace) && (
+            <Marker
+              position={getPlaceCoordinate(navigationPlace)}
+              title={navigationPlace.name}
+            />
+          )}
+
+        {position && (
+          <Marker
+            position={position}
+            title="Your location"
+            icon={{
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: "#2563eb",
+              fillOpacity: 1,
+              strokeColor: "#ffffff",
+              strokeWeight: 3,
+            }}
+          />
+        )}
+
+        {routes.map((item, index) => (
+          <Polyline
+            key={item.id || index}
+            path={item.path}
+            options={{
+              strokeColor: index === selectedRouteIndex ? "#2563eb" : "#94a3b8",
+              strokeOpacity: index === selectedRouteIndex ? 0.95 : 0.5,
+              strokeWeight: index === selectedRouteIndex ? 6 : 4,
+              zIndex: index === selectedRouteIndex ? 10 : 5,
+            }}
+          />
+        ))}
+
+        {selectedPlace && getPlaceCoordinate(selectedPlace) && (
+          <InfoWindow
+            position={getPlaceCoordinate(selectedPlace)}
+            onCloseClick={() => setSelectedPlace(null)}
+          >
+            <div className="min-w-52 p-1">
+              <h3 className="font-bold text-slate-900">{selectedPlace.name}</h3>
+
+              <p className="mt-1 text-xs text-slate-500">
+                {selectedPlace.location || selectedPlace.formattedAddress}
+              </p>
+
+              <button
+                onClick={() => startPlaceNavigation(selectedPlace)}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
+              >
+                <Navigation size={14} />
+                Directions
+              </button>
+            </div>
+          </InfoWindow>
+        )}
+      </GoogleMap>
+
+      <div className="absolute left-4 top-4 z-20 w-[min(390px,calc(100vw-32px))] overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="border-b border-slate-200 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+                Bharatpur AI
+              </p>
+
+              <h1 className="mt-1 text-xl font-bold text-slate-900">
+                {navigationPlace?.name ||
+                  destinationPlace?.name ||
+                  "Discover Bharatpur"}
+              </h1>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Google Maps navigation
+              </p>
+            </div>
+
+            <button
+              onClick={() => window.history.back()}
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[calc(100vh-110px)] overflow-y-auto">
+          {navigationError && (
+            <div className="m-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              {navigationError}
+            </div>
+          )}
+
+          {gpsError && (
+            <div className="mx-4 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+              {gpsError}
+            </div>
+          )}
+
+          {isNavigating ? (
+            <div className="p-4">
+              <div className="rounded-2xl bg-slate-900 p-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-slate-300">Navigating to</p>
+
+                    <h2 className="mt-1 font-bold">{navigationPlace?.name}</h2>
+                  </div>
+
+                  <Navigation size={24} />
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-white/10 p-3">
+                    <p className="text-[11px] text-slate-300">Distance</p>
+
+                    <p className="mt-1 text-lg font-bold">
+                      {formatDistance(currentRouteMetrics.distance)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-white/10 p-3">
+                    <p className="text-[11px] text-slate-300">ETA</p>
+
+                    <p className="mt-1 text-lg font-bold">
+                      {formatDuration(currentRouteMetrics.duration)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <div className="mb-1 flex justify-between text-[11px] text-slate-300">
+                    <span>Route progress</span>
+
+                    <span>{Math.round(routeProgress)}%</span>
+                  </div>
+
+                  <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-blue-500 transition-all"
+                      style={{
+                        width: `${routeProgress}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {offRoute && (
+                  <div className="mt-4 rounded-xl bg-red-500/20 p-3 text-xs text-red-200">
+                    You are off the route. Recalculating...
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <button
+                  onClick={centerOnUser}
+                  className="flex flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <LocateFixed size={17} />
+                  You
+                </button>
+
+                <button
+                  onClick={centerOnDestination}
+                  className="flex flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <MapPin size={17} />
+                  Place
+                </button>
+
+                <button
+                  onClick={recalculateRoute}
+                  disabled={recalculating}
+                  className="flex flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <RefreshCw
+                    size={17}
+                    className={recalculating ? "animate-spin" : ""}
+                  />
+                  Route
+                </button>
+              </div>
+
+              <button
+                onClick={stopNavigation}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-100"
+              >
+                <X size={17} />
+                Stop Navigation
+              </button>
+
+              {routes.length > 0 && (
+                <div className="mt-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <RouteIcon size={17} className="text-blue-600" />
+
+                    <h3 className="font-bold text-slate-900">Route options</h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    {routes.map((route, index) => {
+                      const metrics = getRouteMetrics(route);
+
+                      const active = index === selectedRouteIndex;
+
+                      return (
+                        <button
+                          key={route.id}
+                          onClick={() => setSelectedRouteIndex(index)}
+                          className={`w-full rounded-xl border p-3 text-left transition ${
+                            active
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-slate-200 bg-white hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                                  active
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {index + 1}
+                              </div>
+
+                              <div>
+                                <p className="text-sm font-bold text-slate-900">
+                                  {getRouteLabel(route, index)}
+                                </p>
+
+                                <p className="text-xs text-slate-500">
+                                  {route.description || "Google route"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <p className="text-sm font-bold text-slate-900">
+                                {formatDuration(metrics.duration)}
+                              </p>
+
+                              <p className="text-xs text-slate-500">
+                                {formatDistance(metrics.distance)}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-5 rounded-xl bg-slate-50 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Car size={17} className="text-blue-600" />
+
+                    <span className="text-xs font-semibold text-slate-700">
+                      Current speed
+                    </span>
+                  </div>
+
+                  <span className="text-sm font-bold text-slate-900">
+                    {Number(speed * 3.6).toFixed(1)} km/h
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-xs text-slate-500">Destination</span>
+
+                  <span className="text-xs font-semibold text-slate-700">
+                    {formatDistance(destinationDistance)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4">
+              <button
+                onClick={() => startNavigation()}
+                disabled={loadingRoute || !destinationPlace}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Navigation size={18} />
+
+                {loadingRoute ? "Calculating route..." : "Start Navigation"}
+              </button>
+
+              <button
+                onClick={centerOnUser}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <Crosshair size={17} />
+                My Location
+              </button>
+            </div>
+          )}
+
+          <div className="border-t border-slate-200 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900">Other Places</h3>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Discover places near you
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowOtherPlaces((value) => !value)}
+                className="text-xs font-semibold text-blue-600"
+              >
+                {showOtherPlaces ? "Hide" : "Show"}
+              </button>
+            </div>
+
+            {showOtherPlaces && (
+              <>
+                <div className="relative mt-4">
+                  <Search
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search places..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                  {categoryOptions.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => setCategory(item)}
+                      className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${
+                        category === item
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {loadingPlaces ? (
+                    <div className="py-8 text-center text-xs text-slate-500">
+                      Loading places...
+                    </div>
+                  ) : nearbyPlaces.length === 0 ? (
+                    <div className="rounded-xl bg-slate-50 p-5 text-center">
+                      <MapPin
+                        size={28}
+                        className="mx-auto mb-2 text-slate-300"
+                      />
+
+                      <p className="text-sm font-semibold text-slate-600">
+                        No places found
+                      </p>
+                    </div>
+                  ) : (
+                    nearbyPlaces.map(({ place, distance }) => (
+                      <div
+                        key={getPlaceKey(place)}
+                        className="rounded-xl border border-slate-200 bg-white p-3"
+                      >
+                        <div className="flex gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg">
+                            {getCategoryIcon(getPlaceCategory(place))}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className="truncate text-sm font-bold text-slate-900">
+                                {place.name}
+                              </h4>
+
+                              {place.rating > 0 && (
+                                <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-amber-600">
+                                  <Star size={12} fill="currentColor" />
+                                  {place.rating}
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="mt-1 truncate text-xs text-slate-500">
+                              {getPlaceCategories(place).join(", ") || "Other"}
+                            </p>
+
+                            <p className="mt-1 text-xs font-medium text-blue-600">
+                              {formatDistance(distance)} away
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => setSelectedPlace(place)}
+                            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            View
+                          </button>
+
+                          <button
+                            onClick={() => startPlaceNavigation(place)}
+                            className="flex items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                          >
+                            <Navigation size={13} />
+                            Directions
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {loadingRoute && (
+        <div className="absolute bottom-5 left-1/2 z-30 -translate-x-1/2 rounded-full bg-slate-900 px-5 py-3 text-xs font-semibold text-white shadow-xl">
+          <span className="flex items-center gap-2">
+            <RefreshCw size={14} className="animate-spin" />
+            Calculating Google route...
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Placemap;
+
+
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const OFF_ROUTE_DISTANCE = 50;
+const REROUTE_COOLDOWN_MS = 15000;
+const ROUTE_REFRESH_MS = 180000;
+const MAX_GPS_ACCURACY = 150;
+
+function isValidCoordinate(lat, lng) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180 &&
+    !(lat === 0 && lng === 0)
+  );
+}
+
+function distanceBetween(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLng / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+function pointToSegmentDistance(point, start, end) {
+  const x = point.lng;
+  const y = point.lat;
+  const x1 = start.lng;
+  const y1 = start.lat;
+  const x2 = end.lng;
+  const y2 = end.lat;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+
+  if (dx === 0 && dy === 0) {
+    return distanceBetween(y, x, y1, x1);
+  }
+
+  const t = ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy);
+  const clamped = Math.max(0, Math.min(1, t));
+  const closestLng = x1 + clamped * dx;
+  const closestLat = y1 + clamped * dy;
+
+  return distanceBetween(y, x, closestLat, closestLng);
+}
+
+function pointToRouteDistance(point, path) {
+  if (!Array.isArray(path) || path.length < 2) {
+    return Infinity;
+  }
+
+  let minimum = Infinity;
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const distance = pointToSegmentDistance(point, path[i], path[i + 1]);
+    minimum = Math.min(minimum, distance);
+  }
+
+  return minimum;
+}
+
+function normalizePathPoint(point) {
+  if (!point) {
+    return null;
+  }
+
+  if (typeof point.lat === "function" && typeof point.lng === "function") {
+    const lat = Number(point.lat());
+    const lng = Number(point.lng());
+
+    if (!isValidCoordinate(lat, lng)) {
+      return null;
+    }
+
+    return { lat, lng };
+  }
+
+  const lat = Number(point.lat);
+  const lng = Number(point.lng);
+
+  if (!isValidCoordinate(lat, lng)) {
+    return null;
+  }
+
+  return { lat, lng };
+}
+
+function normalizeRoute(route) {
+  if (!route) {
+    return null;
+  }
+
+  const rawPath = Array.isArray(route.path) ? route.path : [];
+  const path = rawPath.map(normalizePathPoint).filter(Boolean);
+
+  if (path.length < 2) {
+    return null;
+  }
+
+  return {
+    path,
+    distanceMeters: Number(route.distanceMeters) || 0,
+    durationMillis: Number(route.durationMillis) || 0,
+    raw: route,
+  };
+}
+
+function getTravelMode(mode, TravelMode) {
+  if (mode === "walking") {
+    return TravelMode.WALKING;
+  }
+
+  if (mode === "bicycling") {
+    return TravelMode.BICYCLING;
+  }
+
+  return TravelMode.DRIVING;
+}
+
+export default function useNavigation({
+  destination,
+  mode = "driving",
+  googleLoaded = false,
+}) {
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [position, setPosition] = useState(null);
+  const [route, setRoute] = useState(null);
+  const [loadingRoute, setLoadingRoute] = useState(false);
+  const [error, setError] = useState("");
+  const [offRoute, setOffRoute] = useState(false);
+  const [speed, setSpeed] = useState(0);
+  const [distanceToDestination, setDistanceToDestination] = useState(null);
+  const [eta, setEta] = useState(null);
+  const [snappedDestination, setSnappedDestination] = useState(null);
+
+  const destinationRef = useRef(destination);
+  const routeRef = useRef(null);
+  const positionRef = useRef(null);
+  const watchIdRef = useRef(null);
+  const navigatingRef = useRef(false);
+  const startingNavigationRef = useRef(false);
+  const lastRouteRequestRef = useRef(0);
+  const lastRerouteRef = useRef(0);
+  const routeRequestInFlightRef = useRef(false);
+  const routeRequestIdRef = useRef(0);
+  const quotaExhaustedRef = useRef(false);
+
+  useEffect(() => {
+    destinationRef.current = destination;
+  }, [destination]);
+
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
+
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
+
+  const calculateEta = useCallback((routeData) => {
+    if (
+      !routeData ||
+      !Number.isFinite(routeData.durationMillis) ||
+      routeData.durationMillis <= 0
+    ) {
+      setEta(null);
+      return;
+    }
+
+    const minutes = Math.max(1, Math.round(routeData.durationMillis / 60000));
+    setEta(minutes);
+  }, []);
+
+  const requestRoute = useCallback(
+    async (originOverride = null, options = {}) => {
+      const { force = false, automatic = false } = options;
+
+      if (!googleLoaded) {
+        console.warn("Google Maps is not loaded.");
+        return null;
+      }
+
+      if (quotaExhaustedRef.current) {
+        if (!automatic) {
+          setError("Google Routes API daily quota has been exhausted.");
+        }
+
+        return null;
+      }
+
+      if (routeRequestInFlightRef.current) {
+        return null;
+      }
+
+      const currentDestination = destinationRef.current;
+
+      if (!currentDestination) {
+        setError("Destination is unavailable.");
+        return null;
+      }
+
+      const googlePlaceId = String(
+        currentDestination.googlePlaceId || "",
+      ).trim();
+
+      const destinationLat = Number(currentDestination.lat);
+      const destinationLng = Number(currentDestination.lng);
+
+      if (!isValidCoordinate(destinationLat, destinationLng)) {
+        setError("Destination coordinates are invalid.");
+        return null;
+      }
+
+      let originLat;
+      let originLng;
+
+      if (originOverride) {
+        originLat = Number(originOverride.lat);
+        originLng = Number(originOverride.lng);
+      } else if (positionRef.current) {
+        originLat = Number(positionRef.current.lat);
+        originLng = Number(positionRef.current.lng);
+      }
+
+      if (!isValidCoordinate(originLat, originLng)) {
+        return null;
+      }
+
+      const now = Date.now();
+
+      if (
+        automatic &&
+        !force &&
+        now - lastRouteRequestRef.current < REROUTE_COOLDOWN_MS
+      ) {
+        return null;
+      }
+
+      routeRequestInFlightRef.current = true;
+
+      const requestId = ++routeRequestIdRef.current;
+      lastRouteRequestRef.current = now;
+
+      setLoadingRoute(true);
+      setError("");
+
+      try {
+        if (
+          typeof window === "undefined" ||
+          !window.google?.maps?.importLibrary
+        ) {
+          throw new Error("Google Maps JavaScript API is unavailable.");
+        }
+
+        const { Route, TravelMode } =
+          await window.google.maps.importLibrary("routes");
+
+        const travelMode = getTravelMode(mode, TravelMode);
+
+        const request = {
+          origin: {
+            lat: originLat,
+            lng: originLng,
+          },
+          destination: {
+            lat: destinationLat,
+            lng: destinationLng,
+          },
+          travelMode,
+          computeAlternativeRoutes: false,
+          fields: ["path", "distanceMeters", "durationMillis"],
+        };
+
+        if (mode === "driving") {
+          request.routingPreference = "TRAFFIC_AWARE_OPTIMAL";
+        }
+
+        const result = await Route.computeRoutes(request);
+
+        if (requestId !== routeRequestIdRef.current) {
+          return null;
+        }
+
+        if (
+          !result ||
+          !Array.isArray(result.routes) ||
+          result.routes.length === 0
+        ) {
+          throw new Error("Google Maps did not return a route.");
+        }
+
+        const newRoute = normalizeRoute(result.routes[0]);
+
+        if (!newRoute) {
+          throw new Error("Google returned an invalid route.");
+        }
+
+        setRoute(newRoute);
+        routeRef.current = newRoute;
+
+        calculateEta(newRoute);
+
+        setSnappedDestination({
+          lat: destinationLat,
+          lng: destinationLng,
+          googlePlaceId,
+          distanceFromInput: 0,
+        });
+
+        console.log("GOOGLE ROUTE CREATED", {
+          distanceMeters: newRoute.distanceMeters,
+          durationMillis: newRoute.durationMillis,
+          etaMinutes: newRoute.durationMillis
+            ? Math.round(newRoute.durationMillis / 60000)
+            : null,
+        });
+
+        return newRoute;
+      } catch (routeError) {
+        console.error("GOOGLE ROUTE ERROR:", routeError);
+
+        const message = String(routeError?.message || "");
+
+        const quotaExceeded =
+          message.includes("RESOURCE_EXHAUSTED") ||
+          message.includes("Quota exceeded") ||
+          message.includes("429");
+
+        if (quotaExceeded) {
+          quotaExhaustedRef.current = true;
+
+          setError(
+            "Google Routes API daily quota has been exhausted. Check your Google Cloud quota and billing.",
+          );
+
+          return null;
+        }
+
+        setError(message || "Unable to calculate route.");
+        return null;
+      } finally {
+        routeRequestInFlightRef.current = false;
+        setLoadingRoute(false);
+      }
+    },
+    [googleLoaded, mode, calculateEta],
+  );
+
+  const handlePosition = useCallback(
+    async (geoPosition) => {
+      const coords = geoPosition?.coords;
+
+      if (!coords) {
+        return;
+      }
+
+      const lat = Number(coords.latitude);
+      const lng = Number(coords.longitude);
+      const accuracy = Number(coords.accuracy);
+
+      if (!isValidCoordinate(lat, lng)) {
+        return;
+      }
+
+      if (Number.isFinite(accuracy) && accuracy > MAX_GPS_ACCURACY) {
+        console.warn("GPS accuracy too poor:", accuracy);
+        return;
+      }
+
+      const currentPosition = {
+        lat,
+        lng,
+        accuracy: Number.isFinite(accuracy) ? accuracy : null,
+      };
+
+      positionRef.current = currentPosition;
+      setPosition(currentPosition);
+
+      const gpsSpeed = Number(coords.speed);
+
+      if (Number.isFinite(gpsSpeed) && gpsSpeed >= 0) {
+        setSpeed(gpsSpeed * 3.6);
+      }
+
+      const currentDestination = destinationRef.current;
+
+      if (currentDestination) {
+        const destinationLat = Number(currentDestination.lat);
+        const destinationLng = Number(currentDestination.lng);
+
+        if (isValidCoordinate(destinationLat, destinationLng)) {
+          setDistanceToDestination(
+            distanceBetween(lat, lng, destinationLat, destinationLng),
+          );
+        }
+      }
+
+      if (!navigatingRef.current) {
+        return;
+      }
+
+      if (quotaExhaustedRef.current) {
+        return;
+      }
+
+      const currentRoute = routeRef.current;
+
+      if (
+        !currentRoute ||
+        !Array.isArray(currentRoute.path) ||
+        currentRoute.path.length < 2
+      ) {
+        if (!routeRequestInFlightRef.current) {
+          await requestRoute(currentPosition, {
+            force: true,
+            automatic: true,
+          });
+        }
+
+        return;
+      }
+
+      const distanceFromRoute = pointToRouteDistance(
+        currentPosition,
+        currentRoute.path,
+      );
+
+      const threshold = Math.max(OFF_ROUTE_DISTANCE, (accuracy || 0) + 20);
+      const currentlyOffRoute = distanceFromRoute > threshold;
+
+      setOffRoute(currentlyOffRoute);
+
+      if (currentlyOffRoute && !routeRequestInFlightRef.current) {
+        const now = Date.now();
+
+        if (now - lastRerouteRef.current >= REROUTE_COOLDOWN_MS) {
+          lastRerouteRef.current = now;
+
+          console.log("OFF ROUTE → REROUTING");
+
+          await requestRoute(currentPosition, {
+            force: true,
+            automatic: true,
+          });
+
+          return;
+        }
+      }
+
+      if (
+        !routeRequestInFlightRef.current &&
+        Date.now() - lastRouteRequestRef.current >= ROUTE_REFRESH_MS
+      ) {
+        await requestRoute(currentPosition, {
+          force: true,
+          automatic: true,
+        });
+      }
+    },
+    [requestRoute],
+  );
+
+  useEffect(() => {
+    if (!isNavigating) {
+      return undefined;
+    }
+
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by this browser.");
+      return undefined;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      handlePosition,
+      (geoError) => {
+        console.error("GPS ERROR:", geoError);
+
+        switch (geoError.code) {
+          case 1:
+            setError("Location permission was denied.");
+            break;
+          case 2:
+            setError("Your current location is unavailable.");
+            break;
+          case 3:
+            setError("GPS request timed out.");
+            break;
+          default:
+            setError("Unable to get your location.");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 2000,
+        timeout: 15000,
+      },
+    );
+
+    watchIdRef.current = watchId;
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      watchIdRef.current = null;
+    };
+  }, [isNavigating, handlePosition]);
+
+  const startNavigation = useCallback(async () => {
+    if (startingNavigationRef.current || navigatingRef.current) {
+      return;
+    }
+
+    if (quotaExhaustedRef.current) {
+      setError("Google Routes API daily quota has been exhausted.");
+      return;
+    }
+
+    const currentDestination = destinationRef.current;
+
+    if (!currentDestination) {
+      setError("Destination is unavailable.");
+      return;
+    }
+
+    if (
+      !isValidCoordinate(
+        Number(currentDestination.lat),
+        Number(currentDestination.lng),
+      )
+    ) {
+      setError("Destination coordinates are invalid.");
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported.");
+      return;
+    }
+
+    startingNavigationRef.current = true;
+    navigatingRef.current = true;
+
+    setIsNavigating(true);
+    setError("");
+
+    navigator.geolocation.getCurrentPosition(
+      async (geoPosition) => {
+        try {
+          const coords = geoPosition.coords;
+          const lat = Number(coords.latitude);
+          const lng = Number(coords.longitude);
+          const accuracy = Number(coords.accuracy);
+
+          if (!isValidCoordinate(lat, lng)) {
+            throw new Error("Your GPS coordinates are invalid.");
+          }
+
+          if (Number.isFinite(accuracy) && accuracy > MAX_GPS_ACCURACY) {
+            throw new Error(
+              "Your GPS accuracy is currently too poor to start navigation. Please wait a moment and try again.",
+            );
+          }
+
+          const initialPosition = {
+            lat,
+            lng,
+            accuracy: Number.isFinite(accuracy) ? accuracy : null,
+          };
+
+          positionRef.current = initialPosition;
+          setPosition(initialPosition);
+
+          const newRoute = await requestRoute(initialPosition, {
+            force: true,
+            automatic: false,
+          });
+
+          if (!newRoute) {
+            navigatingRef.current = false;
+            setIsNavigating(false);
+          }
+        } catch (startError) {
+          console.error("INITIAL NAVIGATION ERROR:", startError);
+
+          navigatingRef.current = false;
+          setIsNavigating(false);
+
+          setError(startError?.message || "Unable to start navigation.");
+        } finally {
+          startingNavigationRef.current = false;
+        }
+      },
+      (geoError) => {
+        console.error("INITIAL GPS ERROR:", geoError);
+
+        navigatingRef.current = false;
+        setIsNavigating(false);
+        startingNavigationRef.current = false;
+
+        switch (geoError.code) {
+          case 1:
+            setError(
+              "Location permission was denied. Please allow location access.",
+            );
+            break;
+          case 2:
+            setError("Your current location is unavailable.");
+            break;
+          case 3:
+            setError("GPS request timed out. Please try again.");
+            break;
+          default:
+            setError(
+              "Unable to get your current location. Please allow location access.",
+            );
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 15000,
+      },
+    );
+  }, [requestRoute]);
+
+  const stopNavigation = useCallback(() => {
+    navigatingRef.current = false;
+    startingNavigationRef.current = false;
+
+    setIsNavigating(false);
+    setLoadingRoute(false);
+    setOffRoute(false);
+
+    if (watchIdRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
+    routeRequestIdRef.current += 1;
+    routeRequestInFlightRef.current = false;
+
+    setRoute(null);
+    setEta(null);
+    setDistanceToDestination(null);
+    setSnappedDestination(null);
+
+    console.log("Navigation stopped.");
+  }, []);
+
+  const recalculateRoute = useCallback(async () => {
+    if (quotaExhaustedRef.current) {
+      setError("Google Routes API daily quota has been exhausted.");
+      return null;
+    }
+
+    if (routeRequestInFlightRef.current) {
+      return null;
+    }
+
+    const currentPosition = positionRef.current;
+
+    if (!currentPosition) {
+      setError("Current GPS location is not available yet.");
+      return null;
+    }
+
+    return requestRoute(currentPosition, {
+      force: true,
+      automatic: false,
+    });
+  }, [requestRoute]);
+
+  useEffect(() => {
+    return () => {
+      navigatingRef.current = false;
+      startingNavigationRef.current = false;
+      routeRequestIdRef.current += 1;
+
+      if (watchIdRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, []);
+
+  return {
+    isNavigating,
+    position,
+    route,
+    loadingRoute,
+    error,
+    offRoute,
+    speed,
+    distanceToDestination,
+    eta,
+    snappedDestination,
+    startNavigation,
+    stopNavigation,
+    requestRoute,
+    recalculateRoute,
+  };
+}
+
+
+
+import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
+
+const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
+if (!apiKey) {
+  throw new Error("VITE_GOOGLE_MAPS_API_KEY is missing from your .env file.");
+}
+
+setOptions({
+  key: apiKey,
+  v: "weekly",
+});
+
+export const loadGoogleMaps = async () => {
+  const [mapsLibrary, markerLibrary] = await Promise.all([
+    importLibrary("maps"),
+    importLibrary("marker"),
+  ]);
+
+  return {
+    Map: mapsLibrary.Map,
+
+    AdvancedMarkerElement: markerLibrary.AdvancedMarkerElement,
+  };
+};
+
+
+mapbox.js is not use anywhere
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+
+const PROFILE_MAP = {
+  driving: "mapbox/driving-traffic",
+  walking: "mapbox/walking",
+  cycling: "mapbox/cycling",
+};
+
+const validateCoordinate = (value, min, max) => {
+  return Number.isFinite(value) && value >= min && value <= max;
+};
+
+export const getMapboxRoute = async ({
+  origin,
+  destination,
+  mode = "driving",
+  alternatives = true,
+  bearing = null,
+}) => {
+  if (!MAPBOX_TOKEN) {
+    throw new Error(
+      "Mapbox access token is missing. Check VITE_MAPBOX_ACCESS_TOKEN in your .env file.",
+    );
+  }
+
+  if (!origin || !destination) {
+    throw new Error("Origin and destination are required.");
+  }
+
+
+  if (
+    !validateCoordinate(origin.lat, -90, 90) ||
+    !validateCoordinate(origin.lng, -180, 180)
+  ) {
+    throw new Error("Invalid current location.");
+  }
+
+
+  if (
+    !validateCoordinate(destination.lat, -90, 90) ||
+    !validateCoordinate(destination.lng, -180, 180)
+  ) {
+    throw new Error("Invalid destination location.");
+  }
+
+  const profile = PROFILE_MAP[mode] || PROFILE_MAP.driving;
+
+  const coordinates =
+    `${origin.lng},${origin.lat};` + `${destination.lng},${destination.lat}`;
+
+  const params = new URLSearchParams({
+    alternatives: String(alternatives),
+    steps: "true",
+    overview: "full",
+    geometries: "geojson",
+    language: "en",
+    banner_instructions: "true",
+    voice_instructions: "true",
+    voice_units: "metric",
+    access_token: MAPBOX_TOKEN,
+  });
+
+
+  if (Number.isFinite(bearing) && bearing >= 0 && bearing <= 360) {
+    params.set("bearings", `${bearing},45;`); 
+  }
+
+  const url =
+    `https://api.mapbox.com/directions/v5/` +
+    `${profile}/${coordinates}?${params.toString()}`;
+
+  const response = await fetch(url);
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      data.message || data.error || "Mapbox routing request failed.",
+    );
+  }
+
+  if (
+    data.code !== "Ok" ||
+    !Array.isArray(data.routes) ||
+    data.routes.length === 0
+  ) {
+    throw new Error(
+      "No route was found between your current location and the destination.",
+    );
+  }
+
+  return data;
+};
+
+export const normalizeMapboxRoutes = (data) => {
+  if (!data?.routes) {
+    return [];
+  }
+
+  return data.routes.map((route, index) => ({
+    id: `route-${index}`,
+    distance: route.distance,
+    duration: route.duration,
+    geometry: route.geometry,
+    legs: route.legs || [],
+    weight: route.weight,
+    weight_name: route.weight_name,
+    waypoints: route.waypoints || data.waypoints || [],
+  }));
+};
+
+
+
+
+
+
+
+
+
+import express from "express";
+
+import {
+
+  getPlaces,
+
+  resolvePlace,
+
+  getNearbyPlaces,
+
+  getPlaceById,
+
+} from "../controllers/places.controller.js";
+
+const router = express.Router();
+
+router.get("/", getPlaces);
+
+router.post("/resolve", resolvePlace);
+
+router.get("/nearby/search", getNearbyPlaces);
+
+router.get("/:id", getPlaceById);
+
+export default router;
+
+
+
+
+import { env } from "../config/env.js";
+
+const GOOGLE_PLACES_SEARCH_URL =
+  "https://places.googleapis.com/v1/places:searchText";
+
+
+// ========================================
+// Helpers
+// ========================================
+
+const slugify = (value) => {
+  return String(value)
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
+
+
+function isValidCoordinate(
+  latitude,
+  longitude
+) {
+  return (
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180 &&
+    !(latitude === 0 && longitude === 0)
+  );
+}
+
+
+// ========================================
+// Resolve place with Google Places
+// ========================================
+
+export async function resolvePlaceWithGoogle(
+  name
+) {
+  if (!env.GOOGLE_MAPS_API_KEY) {
+    throw new Error(
+      "GOOGLE_MAPS_API_KEY is not configured on the backend."
+    );
+  }
+
+
+  const cleanName =
+    String(name || "").trim();
+
+
+  if (!cleanName) {
+    throw new Error(
+      "Place name is required."
+    );
+  }
+
+
+  const textQuery =
+    `${cleanName}, Bharatpur, Chitwan, Nepal`;
+
+
+  console.log(
+    `🌐 Google Places search: "${textQuery}"`
+  );
+
+
+  const response =
+    await fetch(
+      GOOGLE_PLACES_SEARCH_URL,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          "X-Goog-Api-Key":
+            env.GOOGLE_MAPS_API_KEY,
+
+          "X-Goog-FieldMask": [
+            "places.id",
+            "places.displayName",
+            "places.formattedAddress",
+            "places.location",
+            "places.types",
+          ].join(","),
+        },
+
+        body: JSON.stringify({
+          textQuery,
+
+          languageCode:
+            "en",
+
+          regionCode:
+            "NP",
+
+          pageSize:
+            5,
+
+          locationBias: {
+            circle: {
+              center: {
+                latitude:
+                  27.5291,
+
+                longitude:
+                  84.3542,
+              },
+
+              radius:
+                50000,
+            },
+          },
+        }),
+      }
+    );
+
+
+  const data =
+    await response
+      .json()
+      .catch(
+        () => ({})
+      );
+
+
+  // ========================================
+  // Google API error
+  // ========================================
+
+  if (!response.ok) {
+    console.error(
+      "❌ Google Places API error:",
+      data
+    );
+
+    throw new Error(
+      data?.error?.message ||
+      "Google Places search failed."
+    );
+  }
+
+
+  // ========================================
+  // No results
+  // ========================================
+
+  if (
+    !Array.isArray(
+      data.places
+    ) ||
+    data.places.length === 0
+  ) {
+    throw new Error(
+      `Google could not find "${cleanName}" in Chitwan, Nepal.`
+    );
+  }
+
+
+  // ========================================
+  // First Google result
+  // ========================================
+
+  const place =
+    data.places[0];
+
+
+  const googlePlaceId =
+    place?.id || "";
+
+
+  const latitude =
+    Number(
+      place?.location?.latitude
+    );
+
+
+  const longitude =
+    Number(
+      place?.location?.longitude
+    );
+
+
+  if (!googlePlaceId) {
+    throw new Error(
+      `Google returned no Place ID for "${cleanName}".`
+    );
+  }
+
+
+  if (
+    !isValidCoordinate(
+      latitude,
+      longitude
+    )
+  ) {
+    throw new Error(
+      `Google returned invalid coordinates for "${cleanName}".`
+    );
+  }
+
+
+  const resolvedName =
+    place?.displayName?.text ||
+    cleanName;
+
+
+  const formattedAddress =
+    place?.formattedAddress ||
+    `${resolvedName}, Chitwan, Nepal`;
+
+
+  return {
+    name:
+      resolvedName,
+
+    slug:
+      slugify(cleanName),
+
+    googlePlaceId,
+
+    formattedAddress,
+
+    location:
+      formattedAddress,
+
+    latitude,
+
+    longitude,
+
+    category:
+      Array.isArray(
+        place?.types
+      )
+        ? place.types
+        : [],
+
+    locationSource:
+      "google-places",
+
+    providerPlaceId:
+      googlePlaceId,
+
+    rawPlace:
+      place,
+  };
+}
+
+
+
+
+
+const GOOGLE_PLACES_URL =
+    "https://places.googleapis.com/v1/places:searchNearby";
+
+const GOOGLE_TEXT_SEARCH_URL =
+    "https://places.googleapis.com/v1/places:searchText";
+
+const GOOGLE_MAPS_API_KEY =
+    process.env.GOOGLE_MAPS_API_KEY;
+
+if (!GOOGLE_MAPS_API_KEY) {
+    console.warn(
+        "⚠️ GOOGLE_MAPS_API_KEY is not configured"
+    );
+}
+
+/*
+========================================
+BHARATPUR SEARCH AREA
+========================================
+
+This is intentionally used only as the
+initial Google search area.
+
+The exact Bharatpur boundary is applied
+after Google returns the places.
+========================================
+*/
+
+const BHARATPUR_CENTER = {
+    latitude: 27.6833,
+    longitude: 84.4333,
+};
+
+/*
+Google Places allows a maximum radius
+of 50,000 meters for Nearby Search.
+*/
+
+const BHARATPUR_SEARCH_RADIUS = 25000;
+
+/*
+========================================
+FIELD MASK
+========================================
+
+Only request fields we actually need.
+
+Google requires a field mask for Places API
+(New), and requesting unnecessary fields can
+increase processing/billing.
+*/
+
+const PLACE_FIELD_MASK = [
+    "places.id",
+    "places.displayName",
+    "places.formattedAddress",
+    "places.location",
+    "places.types",
+    "places.primaryType",
+    "places.rating",
+    "places.userRatingCount",
+    "places.businessStatus",
+    "places.regularOpeningHours",
+    "places.nationalPhoneNumber",
+    "places.websiteUri",
+].join(",");
+
+/*
+========================================
+NORMALIZE GOOGLE PLACE
+========================================
+*/
+
+function normalizeGooglePlace(place) {
+    const latitude =
+        place?.location?.latitude;
+
+    const longitude =
+        place?.location?.longitude;
+
+    return {
+        source: "google_places",
+
+        googlePlaceId:
+            place?.id || "",
+
+        name:
+            place?.displayName?.text ||
+            "Unknown place",
+
+        address:
+            place?.formattedAddress ||
+            "",
+
+        latitude,
+        longitude,
+
+        types:
+            Array.isArray(place?.types)
+                ? place.types
+                : [],
+
+        primaryType:
+            place?.primaryType ||
+            "",
+
+        rating:
+            place?.rating ??
+            null,
+
+        userRatingCount:
+            place?.userRatingCount ??
+            null,
+
+        businessStatus:
+            place?.businessStatus ||
+            null,
+
+        openingHours:
+            place?.regularOpeningHours ||
+            null,
+
+        phone:
+            place?.nationalPhoneNumber ||
+            null,
+
+        website:
+            place?.websiteUri ||
+            null,
+    };
+}
+
+/*
+========================================
+NEARBY SEARCH
+========================================
+*/
+
+export async function searchGoogleNearby({
+    includedTypes = [],
+    maxResultCount = 20,
+} = {}) {
+    if (!GOOGLE_MAPS_API_KEY) {
+        throw new Error(
+            "GOOGLE_MAPS_API_KEY is not configured"
+        );
+    }
+
+    const body = {
+        maxResultCount: Math.min(
+            Math.max(maxResultCount, 1),
+            20
+        ),
+
+        rankPreference:
+            "POPULARITY",
+
+        locationRestriction: {
+            circle: {
+                center:
+                    BHARATPUR_CENTER,
+
+                radius:
+                    BHARATPUR_SEARCH_RADIUS,
+            },
+        },
+    };
+
+    if (
+        Array.isArray(includedTypes) &&
+        includedTypes.length > 0
+    ) {
+        body.includedTypes =
+            includedTypes.slice(0, 10);
+    }
+
+    const response =
+        await fetch(
+            GOOGLE_PLACES_URL,
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+
+                    "X-Goog-Api-Key":
+                        GOOGLE_MAPS_API_KEY,
+
+                    "X-Goog-FieldMask":
+                        PLACE_FIELD_MASK,
+                },
+
+                body:
+                    JSON.stringify(body),
+            }
+        );
+
+    const data =
+        await response.json();
+
+    if (!response.ok) {
+        console.error(
+            "Google Nearby Search error:",
+            data
+        );
+
+        throw new Error(
+            data?.error?.message ||
+            "Google Places Nearby Search failed"
+        );
+    }
+
+    return Array.isArray(data?.places)
+        ? data.places.map(
+            normalizeGooglePlace
+        )
+        : [];
+}
+
+/*
+========================================
+TEXT SEARCH
+========================================
+
+Useful for questions such as:
+
+"hotels in Bharatpur"
+"cafes in Bharatpur"
+"restaurants in Bharatpur"
+"pharmacies in Bharatpur"
+========================================
+*/
+
+export async function searchGoogleText(
+    query,
+    {
+        maxResultCount = 20,
+    } = {}
+) {
+    if (!GOOGLE_MAPS_API_KEY) {
+        throw new Error(
+            "GOOGLE_MAPS_API_KEY is not configured"
+        );
+    }
+
+    const body = {
+        textQuery:
+            `${query} in Bharatpur, Nepal`,
+
+        pageSize: Math.min(
+            Math.max(maxResultCount, 1),
+            20
+        ),
+
+        locationRestriction: {
+            rectangle: {
+                low: {
+                    latitude: 27.58,
+                    longitude: 84.30,
+                },
+
+                high: {
+                    latitude: 27.82,
+                    longitude: 84.58,
+                },
+            },
+        },
+
+        languageCode: "en",
+
+        regionCode: "NP",
+    };
+
+    const response =
+        await fetch(
+            GOOGLE_TEXT_SEARCH_URL,
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json",
+
+                    "X-Goog-Api-Key":
+                        GOOGLE_MAPS_API_KEY,
+
+                    "X-Goog-FieldMask":
+                        PLACE_FIELD_MASK,
+                },
+
+                body:
+                    JSON.stringify(body),
+            }
+        );
+
+    const data =
+        await response.json();
+
+    if (!response.ok) {
+        console.error(
+            "Google Text Search error:",
+            data
+        );
+
+        throw new Error(
+            data?.error?.message ||
+            "Google Places Text Search failed"
+        );
+    }
+
+    return Array.isArray(data?.places)
+        ? data.places.map(
+            normalizeGooglePlace
+        )
+        : [];
+}
+
+
+import mongoose from "mongoose";
+
+import Place from "../models/Place.js";
+
+import {
+    resolvePlaceWithGoogle,
+} from "../services/googlePlaces.js";
+
+/*
+=========================================================
+CHECK COORDINATES
+=========================================================
+*/
+
+function isValidCoordinate(latitude, longitude) {
+    if (!Number.isFinite(latitude)) {
+        return false;
+    }
+
+    if (!Number.isFinite(longitude)) {
+        return false;
+    }
+
+    if (latitude < -90 || latitude > 90) {
+        return false;
+    }
+
+    if (longitude < -180 || longitude > 180) {
+        return false;
+    }
+
+    if (latitude === 0 && longitude === 0) {
+        return false;
+    }
+
+    return true;
+}
+
+/*
+=========================================================
+CREATE SLUG
+=========================================================
+*/
+
+function slugify(value) {
+    return String(value)
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+}
+
+/*
+=========================================================
+ESCAPE REGEX
+=========================================================
+*/
+
+function escapeRegex(value) {
+    return String(value).replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+    );
+}
+
+/*
+=========================================================
+GET ALL PLACES
+=========================================================
+GET /api/places
+=========================================================
+*/
+
+export const getPlaces = async (req, res, next) => {
+    try {
+        const places = await Place.find({})
+            .populate(
+                "category",
+                "name slug isActive"
+            )
+            .sort({
+                rating: -1,
+                reviews: -1,
+                createdAt: -1,
+            })
+            .lean();
+
+        return res.json({
+            success: true,
+            count: places.length,
+            places: places,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/*
+=========================================================
+RESOLVE PLACE
+=========================================================
+POST /api/places/resolve
+=========================================================
+*/
+
+export const resolvePlace = async (req, res) => {
+    try {
+        const name = req.body.name;
+        const slug = req.body.slug;
+
+        let searchName = "";
+
+        if (name) {
+            searchName = String(name).trim();
+        } else if (slug) {
+            searchName = String(slug).trim();
+        }
+
+        if (!searchName) {
+            return res.status(400).json({
+                success: false,
+                error: "Place name is required.",
+            });
+        }
+
+        console.log(`🔎 Resolving: ${searchName}`);
+
+        /*
+        =====================================================
+        STEP 1: SEARCH MONGODB
+        =====================================================
+        */
+
+        const placeSlug = slugify(searchName);
+
+        const placeNameRegex = escapeRegex(searchName);
+
+        let place = await Place.findOne({
+            $or: [
+                {
+                    slug: placeSlug,
+                },
+                {
+                    name: {
+                        $regex: `^${placeNameRegex}$`,
+                        $options: "i",
+                    },
+                },
+            ],
+        });
+
+        /*
+        =====================================================
+        STEP 2: CHECK EXISTING GOOGLE PLACE ID
+        =====================================================
+        */
+
+        if (place && place.googlePlaceId) {
+            console.log(
+                `✅ Existing Google Place ID: ${place.googlePlaceId}`
+            );
+
+            return res.json({
+                success: true,
+                place: place,
+            });
+        }
+
+        /*
+        =====================================================
+        STEP 3: SEARCH GOOGLE PLACES
+        =====================================================
+        */
+
+        console.log(
+            `🌐 Searching Google Places: ${searchName}`
+        );
+
+        const resolved =
+            await resolvePlaceWithGoogle(searchName);
+
+        if (!resolved) {
+            throw new Error(
+                "Google did not return a valid place."
+            );
+        }
+
+        if (!resolved.googlePlaceId) {
+            throw new Error(
+                "Google did not return a valid Place ID."
+            );
+        }
+
+        console.log(
+            `✅ Google result: ${resolved.name}`
+        );
+
+        console.log(
+            `📍 Google Place ID: ${resolved.googlePlaceId}`
+        );
+
+        /*
+        =====================================================
+        STEP 4: UPDATE EXISTING PLACE
+        =====================================================
+        */
+
+        if (place) {
+            place.name = resolved.name;
+
+            place.slug = resolved.slug;
+
+            place.location =
+                resolved.formattedAddress;
+
+            place.googlePlaceId =
+                resolved.googlePlaceId;
+
+            place.formattedAddress =
+                resolved.formattedAddress;
+
+            place.locationPoint = {
+                type: "Point",
+                coordinates: [
+                    resolved.longitude,
+                    resolved.latitude,
+                ],
+            };
+
+            place.locationSource =
+                "google-places";
+
+            place.providerPlaceId = "";
+
+            place.lastVerifiedAt = new Date();
+
+            await place.save();
+
+            console.log(
+                `💾 Updated MongoDB place: ${place._id}`
+            );
+        }
+
+        /*
+        =====================================================
+        STEP 5: CREATE NEW PLACE
+        =====================================================
+        */
+
+        else {
+            let category = [];
+
+            if (Array.isArray(resolved.category)) {
+                category = resolved.category;
+            }
+
+            place = await Place.create({
+                name: resolved.name,
+
+                slug: resolved.slug,
+
+                location:
+                    resolved.formattedAddress,
+
+                googlePlaceId:
+                    resolved.googlePlaceId,
+
+                formattedAddress:
+                    resolved.formattedAddress,
+
+                locationPoint: {
+                    type: "Point",
+                    coordinates: [
+                        resolved.longitude,
+                        resolved.latitude,
+                    ],
+                },
+
+                locationSource:
+                    "google-places",
+
+                providerPlaceId: "",
+
+                lastVerifiedAt: new Date(),
+
+                category: category,
+            });
+
+            console.log(
+                `💾 Created MongoDB place: ${place._id}`
+            );
+        }
+
+        /*
+        =====================================================
+        STEP 6: SEND RESPONSE
+        =====================================================
+        */
+
+        return res.json({
+            success: true,
+            place: place,
+        });
+    } catch (error) {
+        console.error(
+            "❌ Place resolution error:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                error.message ||
+                "Failed to resolve place.",
+        });
+    }
+};
+
+/*
+=========================================================
+GET NEARBY PLACES
+=========================================================
+GET /api/places/nearby/search
+=========================================================
+*/
+
+export const getNearbyPlaces = async (
+    req,
+    res,
+    next
+) => {
+    try {
+        const latitude = Number(req.query.lat);
+
+        const longitude = Number(req.query.lng);
+
+        let radius = Number(req.query.radius);
+
+        if (!radius) {
+            radius = 10000;
+        }
+
+        /*
+        =====================================================
+        CHECK COORDINATES
+        =====================================================
+        */
+
+        if (
+            !isValidCoordinate(
+                latitude,
+                longitude
+            )
+        ) {
+            return res.status(400).json({
+                success: false,
+                error:
+                    "Invalid latitude or longitude.",
+            });
+        }
+
+        /*
+        =====================================================
+        FIND NEARBY PLACES
+        =====================================================
+        */
+
+        const places = await Place.find({
+            locationPoint: {
+                $near: {
+                    $geometry: {
+                        type: "Point",
+
+                        // GeoJSON uses longitude first
+                        coordinates: [
+                            longitude,
+                            latitude,
+                        ],
+                    },
+
+                    $maxDistance: radius,
+                },
+            },
+        });
+
+        /*
+        =====================================================
+        SEND RESPONSE
+        =====================================================
+        */
+
+        return res.json({
+            success: true,
+            count: places.length,
+            places: places,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/*
+=========================================================
+GET SINGLE PLACE
+=========================================================
+GET /api/places/:id
+=========================================================
+*/
+
+export const getPlaceById = async (
+    req,
+    res,
+    next
+) => {
+    try {
+        const id = req.params.id;
+
+        let place = null;
+
+        /*
+        =====================================================
+        SEARCH BY MONGODB OBJECT ID
+        =====================================================
+        */
+
+        if (mongoose.isValidObjectId(id)) {
+            place = await Place.findById(id);
+        }
+
+        /*
+        =====================================================
+        SEARCH BY SLUG
+        =====================================================
+        */
+
+        else {
+            place = await Place.findOne({
+                slug: id,
+            });
+        }
+
+        /*
+        =====================================================
+        PLACE NOT FOUND
+        =====================================================
+        */
+
+        if (!place) {
+            return res.status(404).json({
+                success: false,
+                error: "Place not found.",
+            });
+        }
+
+        /*
+        =====================================================
+        CONVERT MONGOOSE DOCUMENT TO JSON
+        =====================================================
+        */
+
+        const placeData = place.toJSON();
+
+        const latitude =
+            Number(placeData.latitude);
+
+        const longitude =
+            Number(placeData.longitude);
+
+        /*
+        =====================================================
+        CHECK COORDINATES
+        =====================================================
+        */
+
+        if (
+            !isValidCoordinate(
+                latitude,
+                longitude
+            )
+        ) {
+            return res.status(422).json({
+                success: false,
+                error:
+                    "This place has invalid location coordinates.",
+            });
+        }
+
+        /*
+        =====================================================
+        CHECK GOOGLE PLACE ID
+        =====================================================
+        */
+
+        if (!placeData.googlePlaceId) {
+            return res.status(422).json({
+                success: false,
+
+                error:
+                    "This place does not have a Google Place ID yet.",
+
+                place: {
+                    ...placeData,
+
+                    latitude: latitude,
+
+                    longitude: longitude,
+
+                    lat: latitude,
+
+                    lng: longitude,
+                },
+            });
+        }
+
+        /*
+        =====================================================
+        SEND PLACE
+        =====================================================
+        */
+
+        return res.json({
+            success: true,
+            place: {
+                ...placeData,
+                latitude: latitude,
+                longitude: longitude,
+                lat: latitude,
+                lng: longitude,
+                googlePlaceId:
+                    placeData.googlePlaceId,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
+import { point } from "@turf/helpers";
+
+
+/*
+========================================
+FILE PATH
+========================================
+*/
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const boundaryPath = path.join(
+    __dirname,
+    "../data/bharatpur-boundary.geojson"
+);
+
+
+/*
+========================================
+LOAD GEOJSON
+========================================
+*/
+
+let bharatpurBoundary;
+
+try {
+    const file = fs.readFileSync(
+        boundaryPath,
+        "utf-8"
+    );
+
+    bharatpurBoundary = JSON.parse(file);
+
+    console.log(
+        "✅ Bharatpur boundary loaded"
+    );
+
+} catch (error) {
+    console.error(
+        "❌ Failed to load Bharatpur boundary:",
+        error.message
+    );
+
+    throw error;
+}
+
+
+/*
+========================================
+CHECK WHETHER TWO COORDINATES MATCH
+========================================
+*/
+
+function coordinatesEqual(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b)) {
+        return false;
+    }
+
+    return (
+        a.length >= 2 &&
+        b.length >= 2 &&
+        a[0] === b[0] &&
+        a[1] === b[1]
+    );
+}
+
+
+/*
+========================================
+CLOSE A POLYGON RING
+========================================
+
+GeoJSON polygon rings must have the same
+first and last coordinate.
+
+If the source boundary forgot to repeat
+the first coordinate at the end, we fix
+that here.
+========================================
+*/
+
+function closeRing(ring) {
+    if (!Array.isArray(ring)) {
+        return ring;
+    }
+
+    if (ring.length < 3) {
+        return ring;
+    }
+
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+
+    if (!coordinatesEqual(first, last)) {
+        return [
+            ...ring,
+            [...first],
+        ];
+    }
+
+    return ring;
+}
+
+
+/*
+========================================
+NORMALIZE POLYGON COORDINATES
+========================================
+*/
+
+function normalizePolygonCoordinates(
+    coordinates
+) {
+    if (!Array.isArray(coordinates)) {
+        return coordinates;
+    }
+
+    return coordinates.map(
+        (ring) => closeRing(ring)
+    );
+}
+
+
+/*
+========================================
+NORMALIZE GEOJSON GEOMETRY
+========================================
+*/
+
+function normalizeGeometry(geometry) {
+    if (!geometry) {
+        return geometry;
+    }
+
+    if (geometry.type === "Polygon") {
+        return {
+            ...geometry,
+            coordinates:
+                normalizePolygonCoordinates(
+                    geometry.coordinates
+                ),
+        };
+    }
+
+    if (geometry.type === "MultiPolygon") {
+        return {
+            ...geometry,
+            coordinates:
+                geometry.coordinates.map(
+                    (polygon) =>
+                        normalizePolygonCoordinates(
+                            polygon
+                        )
+                ),
+        };
+    }
+
+    return geometry;
+}
+
+
+/*
+========================================
+NORMALIZE GEOJSON
+========================================
+
+Supports:
+
+- Feature
+- FeatureCollection
+- Polygon
+- MultiPolygon
+========================================
+*/
+
+function normalizeGeoJSON(geojson) {
+    if (!geojson) {
+        return geojson;
+    }
+
+
+    /*
+    Feature
+    */
+
+    if (geojson.type === "Feature") {
+        return {
+            ...geojson,
+            geometry:
+                normalizeGeometry(
+                    geojson.geometry
+                ),
+        };
+    }
+
+
+    /*
+    FeatureCollection
+    */
+
+    if (
+        geojson.type ===
+        "FeatureCollection"
+    ) {
+        return {
+            ...geojson,
+
+            features:
+                geojson.features.map(
+                    (feature) => ({
+                        ...feature,
+
+                        geometry:
+                            normalizeGeometry(
+                                feature.geometry
+                            ),
+                    })
+                ),
+        };
+    }
+
+
+    /*
+    Direct Polygon / MultiPolygon
+    */
+
+    return normalizeGeometry(
+        geojson
+    );
+}
+
+
+bharatpurBoundary =
+    normalizeGeoJSON(
+        bharatpurBoundary
+    );
+
+
+/*
+========================================
+GET ACTUAL BOUNDARY GEOMETRY
+========================================
+
+booleanPointInPolygon expects a Polygon
+or MultiPolygon Feature.
+
+If the file is a FeatureCollection,
+we check every feature.
+========================================
+*/
+
+function getBoundaryFeatures() {
+    if (
+        bharatpurBoundary?.type ===
+        "FeatureCollection"
+    ) {
+        return bharatpurBoundary.features
+            .filter(
+                (feature) =>
+                    feature?.geometry &&
+                    (
+                        feature.geometry.type ===
+                        "Polygon" ||
+                        feature.geometry.type ===
+                        "MultiPolygon"
+                    )
+            );
+    }
+
+    if (
+        bharatpurBoundary?.type ===
+        "Feature" &&
+        bharatpurBoundary.geometry
+    ) {
+        return [
+            bharatpurBoundary,
+        ];
+    }
+
+    if (
+        bharatpurBoundary?.type ===
+        "Polygon" ||
+        bharatpurBoundary?.type ===
+        "MultiPolygon"
+    ) {
+        return [
+            {
+                type: "Feature",
+                properties: {},
+                geometry:
+                    bharatpurBoundary,
+            },
+        ];
+    }
+
+    return [];
+}
+
+
+const boundaryFeatures =
+    getBoundaryFeatures();
+
+
+if (boundaryFeatures.length === 0) {
+    throw new Error(
+        "Bharatpur boundary GeoJSON does not contain a valid Polygon or MultiPolygon."
+    );
+}
+
+
+console.log(
+    `🗺️ Bharatpur boundary features: ${boundaryFeatures.length}`
+);
+
+
+/*
+========================================
+CHECK WHETHER POINT IS INSIDE BHARATPUR
+========================================
+*/
+
+export function isInsideBharatpur(
+    latitude,
+    longitude
+) {
+    if (
+        typeof latitude !== "number" ||
+        typeof longitude !== "number"
+    ) {
+        return false;
+    }
+
+
+    /*
+    Basic coordinate validation
+    */
+
+    if (
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+    ) {
+        return false;
+    }
+
+
+    /*
+    GeoJSON coordinates use:
+
+    [longitude, latitude]
+
+    NOT:
+
+    [latitude, longitude]
+    */
+
+    const placePoint = point([
+        longitude,
+        latitude,
+    ]);
+
+
+    /*
+    Test against every Bharatpur
+    boundary feature.
+    */
+
+    return boundaryFeatures.some(
+        (feature) =>
+            booleanPointInPolygon(
+                placePoint,
+                feature
+            )
+    );
+}
+
+
+/*
+========================================
+FILTER GOOGLE PLACES
+========================================
+*/
+
+export function filterBharatpurPlaces(
+    places = []
+) {
+    if (!Array.isArray(places)) {
+        return [];
+    }
+
+    return places.filter(
+        (place) => {
+            if (!place) {
+                return false;
+            }
+
+            const latitude =
+                Number(place.latitude);
+
+            const longitude =
+                Number(place.longitude);
+
+            if (
+                !Number.isFinite(latitude) ||
+                !Number.isFinite(longitude)
+            ) {
+                return false;
+            }
+
+            return isInsideBharatpur(
+                latitude,
+                longitude
+            );
+        }
+    );
+}

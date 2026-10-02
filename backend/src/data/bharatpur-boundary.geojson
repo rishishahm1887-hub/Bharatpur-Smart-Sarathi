@@ -1,0 +1,16 @@
+{
+  "type": "Feature",
+  "properties": {
+    "name": "Bharatpur Metropolitan City"
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [84.30, 27.58],
+        [84.31, 27.58],
+        [84.32, 27.59]
+      ]
+    ]
+  }
+}
