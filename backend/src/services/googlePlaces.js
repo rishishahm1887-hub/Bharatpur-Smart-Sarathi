@@ -1,7 +1,6 @@
 import { env } from "../config/env.js";
 
-const GOOGLE_PLACES_SEARCH_URL =
-  "https://places.googleapis.com/v1/places:searchText";
+const GOOGLE_PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText";
 
 const slugify = (value) => {
   return String(value)
@@ -13,16 +12,10 @@ const slugify = (value) => {
 
 function isValidCoordinate(latitude, longitude) {
   return (
-    Number.isFinite(latitude) &&
-    Number.isFinite(longitude) &&
-    latitude >= -90 &&
-    latitude <= 90 &&
-    longitude >= -180 &&
-    longitude <= 180 &&
-    !(latitude === 0 && longitude === 0)
+    Number.isFinite(latitude) && Number.isFinite(longitude) && latitude >= -90 && 
+    latitude <= 90 && longitude >= -180 && longitude <= 180 && !(latitude === 0 && longitude === 0)
   );
 }
-
 
 export async function resolvePlaceWithGoogle(name) {
   if (!env.GOOGLE_MAPS_API_KEY) {
@@ -36,46 +29,22 @@ export async function resolvePlaceWithGoogle(name) {
   }
 
   const textQuery = `${cleanName}, Bharatpur, Chitwan, Nepal`;
-
   console.log(`🌐 Google Places search: "${textQuery}"`);
-
   const response = await fetch(GOOGLE_PLACES_SEARCH_URL, {
     method: "POST",
-
     headers: {
       "Content-Type": "application/json",
-
       "X-Goog-Api-Key": env.GOOGLE_MAPS_API_KEY,
-
-      "X-Goog-FieldMask": [
-        "places.id",
-        "places.displayName",
-        "places.formattedAddress",
-        "places.location",
-        "places.types",
-      ].join(","),
+      "X-Goog-FieldMask": ["places.id", "places.displayName", 
+        "places.formattedAddress", "places.location", "places.types"].join(","),
     },
 
     body: JSON.stringify({
       textQuery,
-
       languageCode: "en",
-
       regionCode: "NP",
-
       pageSize: 5,
-
-      locationBias: {
-        circle: {
-          center: {
-            latitude: 27.5291,
-
-            longitude: 84.3542,
-          },
-
-          radius: 50000,
-        },
-      },
+      locationBias: { circle: { center: { latitude: 27.5291, longitude: 84.3542 }, radius: 50000 } },
     }),
   });
 
@@ -83,23 +52,17 @@ export async function resolvePlaceWithGoogle(name) {
 
   if (!response.ok) {
     console.error("❌ Google Places API error:", data);
-
     throw new Error(data?.error?.message || "Google Places search failed.");
   }
-
 
   if (!Array.isArray(data.places) || data.places.length === 0) {
     throw new Error(`Google could not find "${cleanName}" in Chitwan, Nepal.`);
   }
 
   const place = data.places[0];
-
   const googlePlaceId = place?.id || "";
-
   const latitude = Number(place?.location?.latitude);
-
   const longitude = Number(place?.location?.longitude);
-
   if (!googlePlaceId) {
     throw new Error(`Google returned no Place ID for "${cleanName}".`);
   }
@@ -109,10 +72,7 @@ export async function resolvePlaceWithGoogle(name) {
   }
 
   const resolvedName = place?.displayName?.text || cleanName;
-
-  const formattedAddress =
-    place?.formattedAddress || `${resolvedName}, Chitwan, Nepal`;
-
+  const formattedAddress = place?.formattedAddress || `${resolvedName}, Chitwan, Nepal`;
   return {
     name: resolvedName,
     slug: slugify(cleanName),
