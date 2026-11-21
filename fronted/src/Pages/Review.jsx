@@ -25,6 +25,7 @@ const StarRating = ({ value, onChange, readOnly = false, size = 20 }) => (
 const getTripPlace = (trip) => (trip?.placeId && typeof trip.placeId === "object" ? trip.placeId : null);
 
 function Review() {
+
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const selectedTripId = searchParams.get("tripId");
@@ -350,7 +351,7 @@ function Review() {
                                 No public reviews yet. Be the first to share your experience.
                             </div>
                         ) : (
-                            <div className="max-h-[900px] space-y-4 overflow-y-auto pr-1">
+                            <div className="max-h-225 space-y-4 overflow-y-auto pr-1">
                                 {publicReviews.map((item) => {
                                     const place = item.placeId;
                                     const name = item.reviewerName || "Bharatpur AI Traveler";

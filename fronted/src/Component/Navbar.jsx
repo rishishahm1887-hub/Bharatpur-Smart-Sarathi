@@ -49,8 +49,8 @@ const Navbar = () => {
                     </div>
 
                     <div>
-                        <h1 className="text-[22px] font-extrabold leading-none tracking-tight text-slate-800 sm:text-[24px]">
-                            Bharatpur Sathii
+                        <h1 className="text-[22px] font-semibold leading-none tracking-tight text-slate-800 sm:text-[24px]">
+                            Bharatpur Smart सारथी
                         </h1>
                         <p className="mt-1 text-[8px] font-bold tracking-[0.22em] text-slate-500 sm:text-[9px]">
                             YOUR TOURISM GUIDE

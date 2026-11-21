@@ -1,20 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@clerk/react";
-import {
-    MapPin, Navigation, Trash2, Compass, Bookmark, Star, X, ArrowRight,
-} from "lucide-react";
+import { MapPin, Navigation, Trash2, Compass, Bookmark, Star, X, ArrowRight, } from "lucide-react";
 import { getMyTrips, removeMyTrip, clearMyTrips } from "../lib/api";
 
 const TripSkeleton = () => (
-    <div className="overflow-hidden rounded-[24px] bg-white ring-1 ring-[#e5ebe8]">
-        <div className="h-[230px] animate-pulse bg-[#e9eeec]" />
-
+    <div className="overflow-hidden rounded-3xl bg-white ring-1 ring-[#e5ebe8]">
+        <div className="h-57.5 animate-pulse bg-[#e9eeec]" />
         <div className="space-y-4 p-5">
             <div className="h-5 w-2/3 animate-pulse rounded-lg bg-[#e9eeec]" />
             <div className="h-4 w-1/2 animate-pulse rounded-lg bg-[#edf1ef]" />
             <div className="h-12 animate-pulse rounded-xl bg-[#edf1ef]" />
-
             <div className="grid grid-cols-2 gap-3">
                 <div className="h-11 animate-pulse rounded-xl bg-[#e9eeec]" />
                 <div className="h-11 animate-pulse rounded-xl bg-[#edf1ef]" />
@@ -23,23 +19,14 @@ const TripSkeleton = () => (
     </div>
 );
 
-const ConfirmModal = ({
-    open,
-    title,
-    description,
-    confirmText,
-    danger = false,
-    loading = false,
-    onClose,
-    onConfirm,
-}) => {
+const ConfirmModal = ({ open, title, description, confirmText, danger = false, loading = false, onClose, onConfirm }) => {
+
     if (!open) {
         return null;
     }
 
     return (
-        <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-[#102a24]/45 px-4 backdrop-blur-sm"
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-[#102a24]/45 px-4 backdrop-blur-sm"
             onMouseDown={(event) => {
                 if (event.target === event.currentTarget) {
                     onClose();
@@ -114,10 +101,9 @@ const ConfirmModal = ({
 };
 
 const Mytrip = () => {
+    
     const navigate = useNavigate();
-
     const { isLoaded, isSignedIn, getToken } = useAuth();
-
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
