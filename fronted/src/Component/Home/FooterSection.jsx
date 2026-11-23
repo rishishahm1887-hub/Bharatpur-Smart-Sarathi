@@ -6,7 +6,7 @@ const FooterSection = ({ navigate }) => {
             name: "Aarav Sharma",
             location: "Kathmandu, Nepal",
             rating: 5,
-            text: "Bharatpur AI made it much easier to discover places around Chitwan. The local recommendations were really useful.",
+            text: "Chitwan AI made it much easier to discover places around Chitwan. The local recommendations were really useful.",
             image: "https://i.pravatar.cc/120?img=12",
         },
         {
@@ -20,7 +20,7 @@ const FooterSection = ({ navigate }) => {
             name: "Daniel Miller",
             location: "United Kingdom",
             rating: 4,
-            text: "A convenient way to explore Bharatpur and Chitwan. I especially liked having attractions, local experiences in one place.",
+            text: "A convenient way to explore Chitwan and Chitwan. I especially liked having attractions, local experiences in one place.",
             image: "https://i.pravatar.cc/120?img=33",
         },
     ];
@@ -43,7 +43,7 @@ const FooterSection = ({ navigate }) => {
                         </h2>
 
                         <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
-                            Discover how other travelers experienced Bharatpur and the surrounding destinations.
+                            Discover how other travelers experienced Chitwan and the surrounding destinations.
                         </p>
                     </div>
 
@@ -121,11 +121,11 @@ const FooterSection = ({ navigate }) => {
                     </div>
 
                     <h2 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                        Ready to explore Bharatpur?
+                        Ready to explore Chitwan?
                     </h2>
 
                     <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-emerald-100/75 sm:text-base">
-                        Let Bharatpur AI help you discover places and experience more of Chitwan.
+                        Let Chitwan AI help you discover places and experience more of Chitwan.
                     </p>
 
                     <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
@@ -150,7 +150,7 @@ const FooterSection = ({ navigate }) => {
             </section>
 
             <footer className="border-t border-slate-200 bg-white px-5 py-7 text-center text-sm text-slate-500">
-                <span className="font-bold text-emerald-800">Bharatpur AI</span>
+                <span className="font-bold text-emerald-800">Chitwan AI</span>
                 <span className="mx-2 text-slate-300">•</span>
                 Your AI-powered tourism guide
             </footer>

@@ -151,7 +151,7 @@ const ExploreSection = ({
                             <h2 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">What are you looking for?</h2>
 
                             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
-                                Explore the best of Bharatpur — nature, culture, adventure and more.
+                                Explore the best of Chitwan — nature, culture, adventure and more.
                             </p>
                         </div>
                     </div>
@@ -256,7 +256,7 @@ const ExploreSection = ({
                             </div>
 
                             <p className="mt-2 text-sm leading-6 text-slate-500">
-                                Places travelers are discovering around Bharatpur and Chitwan.
+                                Places travelers are discovering around Chitwan and Chitwan.
                             </p>
 
                             <div className="mt-6 space-y-3">
@@ -305,7 +305,7 @@ const ExploreSection = ({
                                             <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                                                 <MapPin size={12} />
 
-                                                <span className="truncate">{place?.location || place?.formattedAddress || "Bharatpur"}</span>
+                                                <span className="truncate">{place?.location || place?.formattedAddress || "Chitwan"}</span>
                                             </div>
 
                                             <div className="mt-1 flex items-center gap-1 text-xs">

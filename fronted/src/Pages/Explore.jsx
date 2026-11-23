@@ -322,12 +322,12 @@
 //         <div className="mx-auto max-w-375 px-5 py-10 sm:px-8 md:px-10">
 //           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
 //             <div>
-//               <p className="mb-2 text-xs font-bold uppercase tracking-[0.15em] text-emerald-700">Discover Bharatpur</p>
+//               <p className="mb-2 text-xs font-bold uppercase tracking-[0.15em] text-emerald-700">Discover Chitwan</p>
 
 //               <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Explore places</h1>
 
 //               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
-//                 Discover destinations, experiences and local places managed by Bharatpur AI.
+//                 Discover destinations, experiences and local places managed by Chitwan AI.
 //               </p>
 //             </div>
 
@@ -488,7 +488,7 @@
 //                         <div className="mt-1 flex items-center gap-1 text-xs text-white/80">
 //                           <MapPin size={13} />
 
-//                           <span className="truncate">{place.location || place.formattedAddress || "Bharatpur"}</span>
+//                           <span className="truncate">{place.location || place.formattedAddress || "Chitwan"}</span>
 //                         </div>
 //                       </div>
 //                     </div>
@@ -498,7 +498,7 @@
 
 //                   <div className="p-5">
 //                     <p className="line-clamp-3 text-sm leading-6 text-slate-500">
-//                       {place.description || "Discover this destination in Bharatpur."}
+//                       {place.description || "Discover this destination in Chitwan."}
 //                     </p>
 
 //                     <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
@@ -595,7 +595,7 @@
 //                 <div className="mt-2 flex items-center gap-2 text-sm text-white/80">
 //                   <MapPin size={15} />
 
-//                   {selectedPlace.location || selectedPlace.formattedAddress || "Bharatpur"}
+//                   {selectedPlace.location || selectedPlace.formattedAddress || "Chitwan"}
 //                 </div>
 //               </div>
 //             </div>
@@ -1071,12 +1071,12 @@ const Explore = () => {
         <div className="mx-auto max-w-375 px-5 py-10 sm:px-8 md:px-10">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-[0.15em] text-emerald-700">Discover Bharatpur</p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.15em] text-emerald-700">Discover Chitwan</p>
 
               <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Explore places</h1>
 
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
-                Discover destinations, experiences and local places managed by Bharatpur AI.
+                Discover destinations, experiences and local places managed by Chitwan.
               </p>
             </div>
 
@@ -1237,7 +1237,7 @@ const Explore = () => {
                         <div className="mt-1 flex items-center gap-1 text-xs text-white/80">
                           <MapPin size={13} />
 
-                          <span className="truncate">{place.location || place.formattedAddress || "Bharatpur"}</span>
+                          <span className="truncate">{place.location || place.formattedAddress || "Chitwan"}</span>
                         </div>
                       </div>
                     </div>
@@ -1247,7 +1247,7 @@ const Explore = () => {
 
                   <div className="p-5">
                     <p className="line-clamp-3 text-sm leading-6 text-slate-500">
-                      {place.description || "Discover this destination in Bharatpur."}
+                      {place.description || "Discover this destination in Chitwan."}
                     </p>
 
                     <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
@@ -1344,7 +1344,7 @@ const Explore = () => {
                 <div className="mt-2 flex items-center gap-2 text-sm text-white/80">
                   <MapPin size={15} />
 
-                  {selectedPlace.location || selectedPlace.formattedAddress || "Bharatpur"}
+                  {selectedPlace.location || selectedPlace.formattedAddress || "Chitwan"}
                 </div>
               </div>
             </div>
@@ -1406,7 +1406,7 @@ const Explore = () => {
                       : <div className="mt-4 space-y-3">{placeReviews.map((item) => (
                         <article key={item._id} className="rounded-2xl border border-slate-200 p-4">
                           <div className="flex items-start justify-between gap-3"><div>
-                            <p className="font-bold text-slate-900">{item.reviewerName || "Bharatpur AI Traveler"}</p>
+                            <p className="font-bold text-slate-900">{item.reviewerName || "Chitwan AI Traveler"}</p>
                             <p className="mt-1 text-xs text-slate-500">{item.reviewerTotalReviews || 1} review{(item.reviewerTotalReviews || 1) === 1 ? "" : "s"} by this visitor</p>
                           </div><div className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-sm font-bold text-amber-700">★ {item.rating}/5</div></div>
                           <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{item.review}</p>

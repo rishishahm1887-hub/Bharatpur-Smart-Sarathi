@@ -2,7 +2,9 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useClerk, UserButton, useUser } from "@clerk/react";
-import logo from "../assets/images/logo.jpeg";
+// import logo from "../assets/images/logo.jpeg";
+import logo1 from "../assets/images/logo1.png";
+
 
 import {
     Menu,
@@ -42,17 +44,17 @@ const Navbar = () => {
                 <Link to="/" className="flex items-center gap-3">
                     <div className="relative flex h-15 w-15 items-center justify-center">
                         <img
-                            src={logo}
-                            alt="Bharatpur AI Logo"
+                            src={logo1}
+                            alt="Chitwan Logo"
                             className="h-15 w-15 rounded-full object-cover"
                         />
                     </div>
 
                     <div>
-                        <h1 className="text-[22px] font-semibold leading-none tracking-tight text-slate-800 sm:text-[24px]">
-                            Bharatpur Smart सारथी
+                        <h1 className="text-[22px] font-bold leading-none tracking-tight text-slate-800 sm:text-[26px]">
+                            Explore Chitwan
                         </h1>
-                        <p className="mt-1 text-[8px] font-bold tracking-[0.22em] text-slate-500 sm:text-[9px]">
+                        <p className="mt-1.5 text-[8px] text-center font-bold tracking-[0.22em] text-slate-500 sm:text-[9px]">
                             YOUR TOURISM GUIDE
                         </p>
                     </div>
@@ -67,7 +69,7 @@ const Navbar = () => {
                             <Link
                                 key={item.path}
                                 to={item.path}
-                                className={`relative flex items-center gap-2 px-3 py-6 text-sm font-medium transition 2xl:px-4 ${isActive
+                                className={`relative flex items-center gap-2 px-3 py-6 text-sm font-semibold transition 2xl:px-4 ${isActive
                                     ? "text-emerald-700"
                                     : "text-slate-600 hover:text-emerald-700"
                                     }`}

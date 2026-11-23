@@ -6,8 +6,8 @@ const HeroSection = ({ activeSlide, setActiveSlide, activePlace, popularPlaces, 
         return null;
     }
 
-    const placeName = activePlace.name || activePlace.title || "Bharatpur";
-    const location = activePlace.location || activePlace.formattedAddress || "Bharatpur";
+    const placeName = activePlace.name || activePlace.title || "Chitwan";
+    const location = activePlace.location || activePlace.formattedAddress || "Chitwan";
     const rating = Number(activePlace.rating) > 0 ? Number(activePlace.rating).toFixed(1) : "New";
     const reviews = activePlace.reviews ?? 0;
 
@@ -26,7 +26,7 @@ const HeroSection = ({ activeSlide, setActiveSlide, activePlace, popularPlaces, 
                     </div>
 
                     <h1 className="max-w-170 text-5xl font-black leading-[0.98] tracking-[-0.035em] text-slate-950 sm:text-6xl xl:text-[65px]">
-                        Discover Bharatpur,
+                        Discover Chitwan,
                         <span className="mt-2 block text-emerald-700">your way.</span>
                     </h1>
 
@@ -123,7 +123,7 @@ const HeroSection = ({ activeSlide, setActiveSlide, activePlace, popularPlaces, 
                                 <h2 className="max-w-xl text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">{placeName}</h2>
 
                                 <p className="mt-2 max-w-xl text-sm leading-6 text-white/80 sm:text-base">
-                                    {activePlace.description || "Discover this destination in Bharatpur."}
+                                    {activePlace.description || "Discover this destination in Chitwan."}
                                 </p>
 
                                 <button

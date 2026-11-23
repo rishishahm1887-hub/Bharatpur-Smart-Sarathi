@@ -317,7 +317,7 @@ const Home = () => {
           <div className="text-center">
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-700" />
             <p className="mt-4 text-sm font-medium text-slate-500">
-              Discovering Bharatpur...
+              Discovering Chitwan...
             </p>
           </div>
         </div>
@@ -336,7 +336,7 @@ const Home = () => {
 
             <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-500">
               {error ||
-                "There are currently no places available in Bharatpur AI."}
+                "There are currently no places available in Chitwan AI."}
             </p>
 
             <button
@@ -380,18 +380,18 @@ const Home = () => {
           <div className="mb-8">
             <p className="text-sm font-bold uppercase tracking-wider text-emerald-700">Traveler stories</p>
             <h2 className="mt-2 text-3xl font-black text-slate-900">Recent Visitor Reviews</h2>
-            <p className="mt-2 text-slate-600">Experiences shared by travelers exploring Bharatpur.</p>
+            <p className="mt-2 text-slate-600">Experiences shared by travelers exploring Chitwan.</p>
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {visitorReviews.slice(0, 6).map((item, index) => (
               <article key={item._id || index} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-bold text-slate-900">{item.reviewerName || "Bharatpur AI Traveler"}</p>
+                  <p className="font-bold text-slate-900">{item.reviewerName || "Chitwan AI Traveler"}</p>
                   <span className="text-sm font-semibold text-amber-600">{"★".repeat(Math.max(0, Math.min(5, Number(item.rating) || 0)))}{"☆".repeat(5 - Math.max(0, Math.min(5, Number(item.rating) || 0)))} </span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">{item.reviewerTotalReviews ?? item.totalReviewsByReviewer ?? ""}{(item.reviewerTotalReviews ?? item.totalReviewsByReviewer) != null ? " reviews written" : ""}</p>
                 <p className="mt-4 leading-7 text-slate-700">{item.review}</p>
-                <p className="mt-4 border-t border-slate-100 pt-3 text-sm font-semibold text-emerald-700">{item.placeId?.name || item.place?.name || "Bharatpur destination"}</p>
+                <p className="mt-4 border-t border-slate-100 pt-3 text-sm font-semibold text-emerald-700">{item.placeId?.name || item.place?.name || "Chitwan destination"}</p>
               </article>
             ))}
           </div>

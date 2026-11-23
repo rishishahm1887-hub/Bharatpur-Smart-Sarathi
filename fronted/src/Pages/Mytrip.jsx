@@ -286,7 +286,7 @@ const Mytrip = () => {
                         </div>
 
                         <p className="mt-6 text-xs font-extrabold uppercase tracking-[0.12em] text-[#187967]">
-                            Bharatpur AI
+                            Chitwan AI
                         </p>
 
                         <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[#173b34]">
@@ -348,7 +348,7 @@ const Mytrip = () => {
 
                             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#71807c] sm:text-base">
                                 Keep the places you want to experience across
-                                Bharatpur and Chitwan in one personal
+                                Chitwan and Chitwan in one personal
                                 collection.
                             </p>
                         </div>
@@ -471,7 +471,7 @@ const Mytrip = () => {
                             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#71807c]">
                                 Discover temples, riversides, wildlife
                                 experiences, cultural attractions, and other
-                                destinations around Bharatpur and save the ones
+                                destinations around Chitwan and save the ones
                                 you want to visit.
                             </p>
 
@@ -503,7 +503,7 @@ const Mytrip = () => {
                             </div>
 
                             <span className="hidden rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#687771] ring-1 ring-[#e1e8e4] sm:block">
-                                Bharatpur · Chitwan
+                                Chitwan · Chitwan
                             </span>
                         </div>
 
