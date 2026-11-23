@@ -12,7 +12,7 @@ const router = express.Router();
 router.get("/", getMyReviews);
 router.post("/", createOrUpdateReview);
 router.get("/public", getPublicReviews);
-router.delete("/:tripId", deleteMyReview);
+router.delete("/:placeId", deleteMyReview);
 
 
 export default router;

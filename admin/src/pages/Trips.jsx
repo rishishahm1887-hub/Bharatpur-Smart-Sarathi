@@ -1,291 +1,94 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/react";
-import {
-    Tags,
-    Plus,
-    Pencil,
-    Trash2,
-    X,
-} from "lucide-react";
-
+import { MapPin, Trash2, RefreshCw } from "lucide-react";
 import { apiRequest } from "../lib/api";
 
-const Categories = () => {
+const getCategoryNames = (category) => {
+    const values = Array.isArray(category) ? category : category ? [category] : [];
+    return values
+        .map((item) => typeof item === "string" ? item : item?.name)
+        .filter(Boolean)
+        .join(", ") || "Uncategorized";
+};
+
+const Trips = () => {
     const { getToken } = useAuth();
-
-    const [categories, setCategories] = useState([]);
+    const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [modal, setModal] = useState(false);
-    const [editing, setEditing] = useState(null);
-    const [name, setName] = useState("");
-    const [saving, setSaving] = useState(false);
+    const [deletingId, setDeletingId] = useState(null);
+    const [error, setError] = useState("");
 
-    const loadCategories = async () => {
+    const loadTrips = async () => {
         try {
             setLoading(true);
-
-            const data = await apiRequest(
-                "/admin/categories",
-                {},
-                getToken
-            );
-
-            setCategories(data.categories || []);
-        } catch (error) {
-            alert(error.message);
+            setError("");
+            const data = await apiRequest("/admin/trips", {}, getToken);
+            setTrips(data.trips || []);
+        } catch (err) {
+            setError(err.message || "Unable to load saved trips.");
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        loadCategories();
-    }, []);
+    useEffect(() => { loadTrips(); }, []);
 
-    const openCreate = () => {
-        setEditing(null);
-        setName("");
-        setModal(true);
-    };
-
-    const openEdit = (category) => {
-        setEditing(category.name);
-        setName(category.name);
-        setModal(true);
-    };
-
-    const save = async (e) => {
-        e.preventDefault();
-
-        if (!name.trim()) {
-            return;
-        }
-
+    const removeTrip = async (trip) => {
+        if (!window.confirm("Delete this saved trip entry?")) return;
         try {
-            setSaving(true);
-
-            if (editing) {
-                await apiRequest(
-                    `/admin/categories/${encodeURIComponent(
-                        editing
-                    )}`,
-                    {
-                        method: "PATCH",
-                        body: JSON.stringify({
-                            name: name.trim(),
-                        }),
-                    },
-                    getToken
-                );
-            } else {
-                await apiRequest(
-                    "/admin/categories",
-                    {
-                        method: "POST",
-                        body: JSON.stringify({
-                            name: name.trim(),
-                        }),
-                    },
-                    getToken
-                );
-            }
-
-            setModal(false);
-            await loadCategories();
-        } catch (error) {
-            alert(error.message);
+            setDeletingId(trip._id);
+            await apiRequest(`/admin/trips/${trip._id}`, { method: "DELETE" }, getToken);
+            setTrips((current) => current.filter((item) => item._id !== trip._id));
+        } catch (err) {
+            alert(err.message || "Could not delete trip.");
         } finally {
-            setSaving(false);
-        }
-    };
-
-    const remove = async (category) => {
-        if (
-            !window.confirm(
-                `Remove "${category.name}" from all places?`
-            )
-        ) {
-            return;
-        }
-
-        try {
-            await apiRequest(
-                `/admin/categories/${encodeURIComponent(
-                    category.name
-                )}`,
-                {
-                    method: "DELETE",
-                },
-                getToken
-            );
-
-            await loadCategories();
-        } catch (error) {
-            alert(error.message);
+            setDeletingId(null);
         }
     };
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-900">
-                        Categories
-                    </h2>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                        Manage place categories
-                    </p>
+                    <h2 className="text-2xl font-bold text-slate-900">Saved Trips</h2>
+                    <p className="mt-1 text-sm text-slate-500">Places saved by users to their My Trips list.</p>
                 </div>
-
-                <button
-                    onClick={openCreate}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-                >
-                    <Plus size={18} />
-                    Add Category
+                <button onClick={loadTrips} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                    <RefreshCw size={16} /> Refresh
                 </button>
             </div>
 
-            {loading ? (
-                <div className="flex min-h-64 items-center justify-center rounded-xl border border-slate-200 bg-white">
-                    Loading categories...
-                </div>
-            ) : categories.length === 0 ? (
-                <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-slate-200 bg-white">
-                    <Tags
-                        size={40}
-                        className="mb-3 text-slate-300"
-                    />
+            {error && <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
-                    <p className="font-semibold text-slate-700">
-                        No categories found
-                    </p>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                        Categories appear when they are assigned
-                        to places.
-                    </p>
-                </div>
-            ) : (
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {categories.map((category) => (
-                        <div
-                            key={category.name}
-                            className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-                        >
-                            <div className="flex items-start justify-between">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50">
-                                    <Tags
-                                        size={21}
-                                        className="text-blue-600"
-                                    />
-                                </div>
-
-                                <div className="flex gap-1">
-                                    <button
-                                        onClick={() =>
-                                            openEdit(
-                                                category
-                                            )
-                                        }
-                                        className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
-                                    >
-                                        <Pencil size={16} />
-                                    </button>
-
-                                    <button
-                                        onClick={() =>
-                                            remove(category)
-                                        }
-                                        className="rounded-lg p-2 text-red-600 hover:bg-red-50"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <h3 className="mt-5 text-lg font-semibold text-slate-800">
-                                {category.name}
-                            </h3>
-
-                            <p className="mt-1 text-sm text-slate-500">
-                                {category.placeCount}{" "}
-                                {category.placeCount === 1
-                                    ? "place"
-                                    : "places"}
-                            </p>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {modal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-                            <h3 className="font-bold text-slate-900">
-                                {editing
-                                    ? "Rename Category"
-                                    : "Add Category"}
-                            </h3>
-
-                            <button
-                                onClick={() => setModal(false)}
-                                className="rounded-lg p-2 hover:bg-slate-100"
-                            >
-                                <X size={19} />
-                            </button>
-                        </div>
-
-                        <form
-                            onSubmit={save}
-                            className="space-y-5 p-6"
-                        >
-                            <div>
-                                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                                    Category Name
-                                </label>
-
-                                <input
-                                    value={name}
-                                    onChange={(e) =>
-                                        setName(
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Nature"
-                                    autoFocus
-                                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                                />
-                            </div>
-
-                            <div className="flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        setModal(false)
-                                    }
-                                    className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm"
-                                >
-                                    Cancel
-                                </button>
-
-                                <button
-                                    disabled={saving}
-                                    className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                                >
-                                    {saving
-                                        ? "Saving..."
-                                        : "Save"}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                {loading ? <div className="p-12 text-center text-slate-500">Loading saved trips...</div>
+                    : trips.length === 0 ? <div className="p-12 text-center"><MapPin className="mx-auto mb-3 text-slate-300" size={36} /><p className="font-semibold text-slate-700">No saved trips yet</p></div>
+                        : <div className="overflow-x-auto">
+                            <table className="w-full min-w-[850px] text-left text-sm">
+                                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                                    <tr><th className="px-4 py-3">Place</th><th className="px-4 py-3">Category</th><th className="px-4 py-3">Location</th><th className="px-4 py-3">User ID</th><th className="px-4 py-3">Saved On</th><th className="px-4 py-3 text-right">Action</th></tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {trips.map((trip) => {
+                                        const place = trip.placeId;
+                                        return <tr key={trip._id} className="hover:bg-slate-50">
+                                            <td className="px-4 py-3"><div className="flex items-center gap-3">
+                                                {place?.image ? <img src={place.image} alt="" className="h-11 w-14 rounded-lg object-cover" /> : <div className="flex h-11 w-14 items-center justify-center rounded-lg bg-slate-100"><MapPin size={17} /></div>}
+                                                <div className="font-semibold text-slate-800">{place?.name || "Place deleted"}</div>
+                                            </div></td>
+                                            <td className="px-4 py-3 text-slate-600">{getCategoryNames(place?.category)}</td>
+                                            <td className="px-4 py-3 text-slate-600">{place?.location || "—"}</td>
+                                            <td className="px-4 py-3 font-mono text-xs text-slate-500">{trip.userId || "—"}</td>
+                                            <td className="px-4 py-3 text-slate-600">{trip.createdAt ? new Date(trip.createdAt).toLocaleDateString() : "—"}</td>
+                                            <td className="px-4 py-3 text-right"><button onClick={() => removeTrip(trip)} disabled={deletingId === trip._id} title="Delete saved trip" className="inline-flex items-center justify-center rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"><Trash2 size={16} /></button></td>
+                                        </tr>;
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>}
+            </div>
         </div>
     );
 };
 
-export default Categories;
+export default Trips;
