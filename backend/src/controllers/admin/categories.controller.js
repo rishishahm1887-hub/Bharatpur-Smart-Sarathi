@@ -200,16 +200,17 @@ export const deleteCategory = async (req, res) => {
             });
         }
 
-        await Place.updateMany(
-            {
-                category: category._id,
-            },
-            {
-                $pull: {
-                    category: category._id,
-                },
-            },
-        );
+        const placeCount = await Place.countDocuments({
+            category: category._id,
+        });
+
+        if (placeCount > 0) {
+            return res.status(409).json({
+                success: false,
+                error: `Cannot delete this category because ${placeCount} place${placeCount !== 1 ? "s are" : " is"} using it.`,
+                placeCount,
+            });
+        }
 
         await category.deleteOne();
 

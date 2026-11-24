@@ -51,6 +51,11 @@ export const getMySavedPlaces = async (req, res, next) => {
             .populate({
                 path: "placeId",
                 model: Place,
+                populate: {
+                    path: "category",
+                    model: "Category",
+                    select: "name slug",
+                },
             })
             .sort({
                 createdAt: -1,
@@ -160,6 +165,11 @@ export const addPlaceToMyTrip = async (req, res, next) => {
         await trip.populate({
             path: "placeId",
             model: Place,
+            populate: {
+                path: "category",
+                model: "Category",
+                select: "name slug",
+            },
         });
 
         /*

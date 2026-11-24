@@ -1,97 +1,22 @@
-import { ArrowUpRight, ChevronRight, Compass, Quote, Star } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Compass, Quote } from "lucide-react";
 
 const FooterSection = ({ navigate }) => {
-    const reviews = [
-        {
-            name: "Aarav Sharma",
-            location: "Kathmandu, Nepal",
-            rating: 5,
-            text: "Chitwan AI made it much easier to discover places around Chitwan. The local recommendations were really useful.",
-            image: "https://i.pravatar.cc/120?img=12",
-        },
-        {
-            name: "Priya Thapa",
-            location: "Pokhara, Nepal",
-            rating: 5,
-            text: "I found several places that I had never heard about before. The experience feels simple and helpful, especially when discovering a new place.",
-            image: "https://i.pravatar.cc/120?img=47",
-        },
-        {
-            name: "Daniel Miller",
-            location: "United Kingdom",
-            rating: 4,
-            text: "A convenient way to explore Chitwan and Chitwan. I especially liked having attractions, local experiences in one place.",
-            image: "https://i.pravatar.cc/120?img=33",
-        },
-    ];
-
     return (
         <>
             <section className="border-y border-slate-200 bg-[#F7FAF8]">
                 <div className="mx-auto max-w-375 px-5 py-14 sm:px-8 md:px-10 lg:py-20">
                     {/* Header */}
-
                     <div className="mx-auto max-w-2xl text-center">
                         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-700 text-white shadow-lg shadow-emerald-700/20">
                             <Quote size={21} />
                         </div>
-
                         <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Traveler experiences</p>
-
                         <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
                             What travelers are saying
                         </h2>
-
                         <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
                             Discover how other travelers experienced Chitwan and the surrounding destinations.
                         </p>
-                    </div>
-
-                    {/* Reviews */}
-
-                    <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                        {reviews.map((review) => (
-                            <article
-                                key={review.name}
-                                className="group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-100 hover:shadow-[0_20px_50px_rgba(15,23,42,0.08)]"
-                            >
-                                {/* Rating */}
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex gap-1">
-                                        {Array.from({ length: 5 }).map((_, index) => (
-                                            <Star
-                                                key={index}
-                                                size={15}
-                                                className={index < review.rating ? "fill-amber-400 text-amber-400" : "text-slate-200"}
-                                            />
-                                        ))}
-                                    </div>
-
-                                    <Quote size={24} className="text-emerald-100" />
-                                </div>
-
-                                {/* Review text */}
-
-                                <p className="mt-5 min-h-27.5 text-sm leading-7 text-slate-600">“{review.text}”</p>
-
-                                {/* User */}
-
-                                <div className="mt-6 flex items-center gap-3 border-t border-slate-100 pt-5">
-                                    <img
-                                        src={review.image}
-                                        alt={review.name}
-                                        className="h-11 w-11 rounded-full object-cover ring-2 ring-emerald-50"
-                                    />
-
-                                    <div className="min-w-0">
-                                        <h3 className="truncate text-sm font-bold text-slate-800">{review.name}</h3>
-
-                                        <p className="mt-0.5 text-xs text-slate-500">{review.location}</p>
-                                    </div>
-                                </div>
-                            </article>
-                        ))}
                     </div>
 
                     <div className="mt-8 flex justify-center">
@@ -112,22 +37,17 @@ const FooterSection = ({ navigate }) => {
 
             <section className="relative overflow-hidden bg-[#103D35]">
                 <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
-
                 <div className="absolute -bottom-32 -right-20 h-80 w-80 rounded-full bg-teal-300/10 blur-3xl" />
-
                 <div className="relative mx-auto max-w-250 px-5 py-14 text-center sm:px-8 sm:py-16">
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-emerald-200 backdrop-blur">
                         <Compass size={23} />
                     </div>
-
                     <h2 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl">
                         Ready to explore Chitwan?
                     </h2>
-
                     <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-emerald-100/75 sm:text-base">
                         Let Chitwan AI help you discover places and experience more of Chitwan.
                     </p>
-
                     <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
                         <button
                             type="button"
@@ -137,7 +57,6 @@ const FooterSection = ({ navigate }) => {
                             View My Trips
                             <ChevronRight size={17} />
                         </button>
-
                         <button
                             type="button"
                             onClick={() => navigate("/explore")}
@@ -195,3 +114,5 @@ const FooterSection = ({ navigate }) => {
 };
 
 export default FooterSection;
+
+

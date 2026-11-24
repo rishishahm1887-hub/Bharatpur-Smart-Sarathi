@@ -1,7 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@clerk/react";
-import { MapPin, Navigation, Trash2, Compass, Bookmark, Star, X, ArrowRight, } from "lucide-react";
+import {
+    MapPin,
+    Navigation,
+    Trash2,
+    Compass,
+    Bookmark,
+    Star,
+    X,
+    ArrowRight,
+} from "lucide-react";
 import { getMyTrips, removeMyTrip, clearMyTrips } from "../lib/api";
 
 const TripSkeleton = () => (
@@ -19,19 +28,21 @@ const TripSkeleton = () => (
     </div>
 );
 
-const ConfirmModal = ({ open, title, description, confirmText, danger = false, loading = false, onClose, onConfirm }) => {
-
-    if (!open) {
-        return null;
-    }
-
+const ConfirmModal = ({
+    open,
+    title,
+    description,
+    confirmText,
+    danger = false,
+    loading = false,
+    onClose,
+    onConfirm,
+}) => {
+    if (!open) return null;
     return (
-        <div className="fixed inset-0 z-100 flex items-center justify-center bg-[#102a24]/45 px-4 backdrop-blur-sm"
-            onMouseDown={(event) => {
-                if (event.target === event.currentTarget) {
-                    onClose();
-                }
-            }}
+        <div
+            className="fixed inset-0 z-100 flex items-center justify-center bg-[#102a24]/45 px-4 backdrop-blur-sm"
+            onMouseDown={(e) => e.target === e.currentTarget && onClose()}
         >
             <div
                 role="dialog"
@@ -41,10 +52,7 @@ const ConfirmModal = ({ open, title, description, confirmText, danger = false, l
                 <div className="p-6 sm:p-7">
                     <div className="flex items-start justify-between gap-4">
                         <div
-                            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${danger
-                                ? "bg-red-50 text-red-600"
-                                : "bg-[#e8f3ef] text-[#187967]"
-                                }`}
+                            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${danger ? "bg-red-50 text-red-600" : "bg-[#e8f3ef] text-[#187967]"}`}
                         >
                             {danger ? (
                                 <Trash2 className="h-5 w-5" />
@@ -52,7 +60,6 @@ const ConfirmModal = ({ open, title, description, confirmText, danger = false, l
                                 <Bookmark className="h-5 w-5" />
                             )}
                         </div>
-
                         <button
                             type="button"
                             onClick={onClose}
@@ -63,15 +70,10 @@ const ConfirmModal = ({ open, title, description, confirmText, danger = false, l
                             <X className="h-5 w-5" />
                         </button>
                     </div>
-
                     <h2 className="mt-5 text-xl font-extrabold tracking-tight text-[#173b34]">
                         {title}
                     </h2>
-
-                    <p className="mt-2 text-sm leading-6 text-[#71807c]">
-                        {description}
-                    </p>
-
+                    <p className="mt-2 text-sm leading-6 text-[#71807c]">{description}</p>
                     <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                         <button
                             type="button"
@@ -81,15 +83,11 @@ const ConfirmModal = ({ open, title, description, confirmText, danger = false, l
                         >
                             Cancel
                         </button>
-
                         <button
                             type="button"
                             onClick={onConfirm}
                             disabled={loading}
-                            className={`rounded-xl px-5 py-3 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${danger
-                                ? "bg-red-600 hover:bg-red-700"
-                                : "bg-[#187967] hover:bg-[#126554]"
-                                }`}
+                            className={`rounded-xl px-5 py-3 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${danger ? "bg-red-600 hover:bg-red-700" : "bg-[#187967] hover:bg-[#126554]"}`}
                         >
                             {loading ? "Please wait..." : confirmText}
                         </button>
@@ -101,7 +99,6 @@ const ConfirmModal = ({ open, title, description, confirmText, danger = false, l
 };
 
 const Mytrip = () => {
-    
     const navigate = useNavigate();
     const { isLoaded, isSignedIn, getToken } = useAuth();
     const [trips, setTrips] = useState([]);
@@ -114,32 +111,18 @@ const Mytrip = () => {
 
     const loadTrips = useCallback(async () => {
         try {
-            if (!isLoaded) {
-                return;
-            }
-
+            if (!isLoaded) return;
             if (!isSignedIn) {
                 setTrips([]);
                 setLoading(false);
                 return;
             }
-
             setLoading(true);
             setError("");
-
             const token = await getToken();
-
-            if (!token) {
-                throw new Error("Authentication token is unavailable.");
-            }
-
+            if (!token) throw new Error("Authentication token is unavailable.");
             const result = await getMyTrips(token);
-
-            const tripsData = Array.isArray(result)
-                ? result
-                : result?.trips || [];
-
-            setTrips(tripsData);
+            setTrips(Array.isArray(result) ? result : result?.trips || []);
         } catch (err) {
             console.error("Failed to load My Trips:", err);
             setError(err?.message || "Unable to load your saved places.");
@@ -154,81 +137,49 @@ const Mytrip = () => {
 
     const statistics = useMemo(() => {
         const categories = new Set();
-
-        let ratedCount = 0;
-        let ratingTotal = 0;
-
+        let rated = 0,
+            ratingTotal = 0;
         trips.forEach((trip) => {
             const place = trip?.placeId;
-
-            if (!place) {
-                return;
-            }
-
+            if (!place) return;
             if (Array.isArray(place.category)) {
                 place.category.forEach((category) => {
-                    if (category) {
-                        categories.add(category);
+                    if (category?.name) {
+                        categories.add(category.name);
                     }
                 });
             }
-
             const rating = Number(place.rating) || 0;
-
             if (rating > 0) {
-                ratedCount++;
+                rated++;
                 ratingTotal += rating;
             }
         });
-
         return {
             places: trips.length,
             categories: categories.size,
-            rated: ratedCount,
-            averageRating: ratedCount
-                ? (ratingTotal / ratedCount).toFixed(1)
-                : "—",
+            rated,
+            averageRating: rated ? (ratingTotal / rated).toFixed(1) : "—",
         };
     }, [trips]);
 
     const handleRemove = async () => {
-        const trip = removeTarget;
-
-        if (!trip) {
-            return;
-        }
-
+        if (!removeTarget) return;
         try {
-            const place = trip?.placeId;
-
-            const placeId =
-                typeof place === "string" ? place : place?._id;
-
-            if (!placeId) {
-                throw new Error("Place ID is missing.");
-            }
-
+            const place = removeTarget?.placeId;
+            const placeId = typeof place === "string" ? place : place?._id;
+            if (!placeId) throw new Error("Place ID is missing.");
             setRemovingId(placeId);
-
             const token = await getToken();
-
-            if (!token) {
-                throw new Error("Authentication token is unavailable.");
-            }
-
+            if (!token) throw new Error("Authentication token is unavailable.");
             await removeMyTrip(placeId, token);
-
-            setTrips((currentTrips) =>
-                currentTrips.filter((item) => {
+            setTrips((current) =>
+                current.filter((item) => {
                     const id =
-                        typeof item.placeId === "string"
-                            ? item.placeId
-                            : item.placeId?._id;
-
+                        typeof item.placeId === "string" ? item.placeId : item.placeId?._id;
                     return id !== placeId;
-                })
+                }),
             );
-
             setRemoveTarget(null);
         } catch (err) {
             console.error("Failed to remove trip:", err);
@@ -244,17 +195,10 @@ const Mytrip = () => {
                 setShowClearModal(false);
                 return;
             }
-
             setClearing(true);
-
             const token = await getToken();
-
-            if (!token) {
-                throw new Error("Authentication token is unavailable.");
-            }
-
+            if (!token) throw new Error("Authentication token is unavailable.");
             await clearMyTrips(token);
-
             setTrips([]);
             setShowClearModal(false);
         } catch (err) {
@@ -267,12 +211,10 @@ const Mytrip = () => {
 
     const handleDirections = (trip) => {
         const place = trip?.placeId;
-
         if (!place?._id) {
             alert("Place information is unavailable.");
             return;
         }
-
         navigate(`/places/${place._id}/map`);
     };
 
@@ -284,28 +226,22 @@ const Mytrip = () => {
                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#e8f3ef] text-[#187967]">
                             <Bookmark className="h-7 w-7" />
                         </div>
-
                         <p className="mt-6 text-xs font-extrabold uppercase tracking-[0.12em] text-[#187967]">
                             Chitwan AI
                         </p>
-
                         <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[#173b34]">
                             Your saved places
                         </h1>
-
                         <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#71807c]">
-                            Sign in to save destinations, build your personal
-                            travel collection, and get directions whenever
-                            you're ready to explore.
+                            Sign in to save destinations, build your personal travel
+                            collection, and get directions whenever you're ready to explore.
                         </p>
-
                         <button
                             type="button"
                             onClick={() => navigate("/")}
                             className="mt-7 inline-flex items-center justify-center gap-2 rounded-xl bg-[#187967] px-6 py-3 text-sm font-bold text-white transition hover:bg-[#126554]"
                         >
-                            Go to Home
-                            <ArrowRight className="h-4 w-4" />
+                            Go to Home <ArrowRight className="h-4 w-4" />
                         </button>
                     </div>
                 </div>
@@ -318,9 +254,7 @@ const Mytrip = () => {
             <div className="min-h-screen bg-[#f5f7f5]">
                 <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
                     <div className="h-8 w-44 animate-pulse rounded-lg bg-[#e5ebe8]" />
-
                     <div className="mt-3 h-4 w-80 max-w-full animate-pulse rounded-lg bg-[#edf1ef]" />
-
                     <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                         {[1, 2, 3].map((item) => (
                             <TripSkeleton key={item} />
@@ -338,39 +272,31 @@ const Mytrip = () => {
                     <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <div className="inline-flex items-center gap-2 rounded-full bg-[#e8f3ef] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#187967]">
-                                <Bookmark className="h-3.5 w-3.5" />
-                                Saved collection
+                                <Bookmark className="h-3.5 w-3.5" /> Saved collection
                             </div>
-
                             <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-[#173b34] sm:text-4xl">
                                 My Trips
                             </h1>
-
                             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#71807c] sm:text-base">
-                                Keep the places you want to experience across
-                                Chitwan and Chitwan in one personal
-                                collection.
+                                Keep the places you want to experience across Chitwan and
+                                Chitwan in one personal collection.
                             </p>
                         </div>
-
                         <div className="flex flex-wrap gap-3">
                             <button
                                 type="button"
                                 onClick={() => navigate("/explore")}
                                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#d8e2de] bg-white px-5 py-3 text-sm font-bold text-[#30463f] transition hover:border-[#187967] hover:text-[#187967]"
                             >
-                                <Compass className="h-4 w-4" />
-                                Explore Places
+                                <Compass className="h-4 w-4" /> Explore Places
                             </button>
-
                             {trips.length > 0 && (
                                 <button
                                     type="button"
                                     onClick={() => setShowClearModal(true)}
                                     className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50"
                                 >
-                                    <Trash2 className="h-4 w-4" />
-                                    Clear all
+                                    <Trash2 className="h-4 w-4" /> Clear all
                                 </button>
                             )}
                         </div>
@@ -378,44 +304,29 @@ const Mytrip = () => {
 
                     {trips.length > 0 && (
                         <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                            <div className="rounded-2xl border border-[#e5ebe8] bg-[#fafcfb] p-4">
-                                <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9793]">
-                                    Saved places
-                                </p>
-
-                                <p className="mt-1 text-2xl font-extrabold text-[#173b34]">
-                                    {statistics.places}
-                                </p>
-                            </div>
-
-                            <div className="rounded-2xl border border-[#e5ebe8] bg-[#fafcfb] p-4">
-                                <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9793]">
-                                    Categories
-                                </p>
-
-                                <p className="mt-1 text-2xl font-extrabold text-[#173b34]">
-                                    {statistics.categories}
-                                </p>
-                            </div>
-
-                            <div className="rounded-2xl border border-[#e5ebe8] bg-[#fafcfb] p-4">
-                                <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9793]">
-                                    Rated
-                                </p>
-
-                                <p className="mt-1 text-2xl font-extrabold text-[#173b34]">
-                                    {statistics.rated}
-                                </p>
-                            </div>
-
+                            {[
+                                ["Saved places", statistics.places],
+                                ["Categories", statistics.categories],
+                                ["Rated", statistics.rated],
+                            ].map(([label, value]) => (
+                                <div
+                                    key={label}
+                                    className="rounded-2xl border border-[#e5ebe8] bg-[#fafcfb] p-4"
+                                >
+                                    <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9793]">
+                                        {label}
+                                    </p>
+                                    <p className="mt-1 text-2xl font-extrabold text-[#173b34]">
+                                        {value}
+                                    </p>
+                                </div>
+                            ))}
                             <div className="rounded-2xl border border-[#e5ebe8] bg-[#fafcfb] p-4">
                                 <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9793]">
                                     Avg. rating
                                 </p>
-
                                 <div className="mt-1 flex items-center gap-1.5">
                                     <Star className="h-4 w-4 fill-current text-[#e6a929]" />
-
                                     <p className="text-2xl font-extrabold text-[#173b34]">
                                         {statistics.averageRating}
                                     </p>
@@ -433,12 +344,8 @@ const Mytrip = () => {
                             <p className="text-sm font-extrabold text-red-800">
                                 Unable to load your saved places
                             </p>
-
-                            <p className="mt-1 text-sm leading-5 text-red-700">
-                                {error}
-                            </p>
+                            <p className="mt-1 text-sm leading-5 text-red-700">{error}</p>
                         </div>
-
                         <button
                             type="button"
                             onClick={loadTrips}
@@ -452,36 +359,28 @@ const Mytrip = () => {
                 {!error && trips.length === 0 && (
                     <div className="relative overflow-hidden rounded-[30px] border border-[#e2e9e6] bg-white px-6 py-16 text-center shadow-sm sm:px-10">
                         <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-[#e8f3ef]" />
-
                         <div className="absolute -bottom-24 -left-20 h-48 w-48 rounded-full bg-[#f2f7f5]" />
-
                         <div className="relative">
                             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[24px] bg-[#e8f3ef] text-[#187967]">
                                 <MapPin className="h-9 w-9" />
                             </div>
-
                             <p className="mt-6 text-xs font-extrabold uppercase tracking-[0.12em] text-[#187967]">
                                 Your collection is empty
                             </p>
-
                             <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[#173b34] sm:text-3xl">
                                 Start building your journey
                             </h2>
-
                             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#71807c]">
-                                Discover temples, riversides, wildlife
-                                experiences, cultural attractions, and other
-                                destinations around Chitwan and save the ones
-                                you want to visit.
+                                Discover temples, riversides, wildlife experiences, cultural
+                                attractions, and other destinations around Chitwan and save the
+                                ones you want to visit.
                             </p>
-
                             <button
                                 type="button"
                                 onClick={() => navigate("/explore")}
                                 className="mt-7 inline-flex items-center justify-center gap-2 rounded-xl bg-[#187967] px-6 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-[#126554] hover:shadow-md"
                             >
-                                Explore destinations
-                                <ArrowRight className="h-4 w-4" />
+                                Explore destinations <ArrowRight className="h-4 w-4" />
                             </button>
                         </div>
                     </div>
@@ -494,14 +393,11 @@ const Mytrip = () => {
                                 <h2 className="text-lg font-extrabold text-[#173b34]">
                                     Your saved destinations
                                 </h2>
-
                                 <p className="mt-1 text-xs text-[#85918d]">
-                                    {trips.length} destination
-                                    {trips.length !== 1 ? "s" : ""} ready for
-                                    your next adventure.
+                                    {trips.length} destination{trips.length !== 1 ? "s" : ""}{" "}
+                                    ready for your next adventure.
                                 </p>
                             </div>
-
                             <span className="hidden rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#687771] ring-1 ring-[#e1e8e4] sm:block">
                                 Chitwan · Chitwan
                             </span>
@@ -510,19 +406,11 @@ const Mytrip = () => {
                         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
                             {trips.map((trip) => {
                                 const place = trip?.placeId;
-
-                                if (!place) {
-                                    return null;
-                                }
-
+                                if (!place) return null;
                                 const placeId = place?._id;
-
-                                const categories = Array.isArray(
-                                    place.category
-                                )
+                                const categories = Array.isArray(place.category)
                                     ? place.category
                                     : [];
-
                                 const rating = Number(place.rating) || 0;
 
                                 return (
@@ -543,21 +431,16 @@ const Mytrip = () => {
                                                     <MapPin className="h-12 w-12" />
                                                 </div>
                                             )}
-
                                             <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/55 to-transparent" />
-
                                             <div className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wide text-[#187967] shadow-sm backdrop-blur">
-                                                <Bookmark className="h-3.5 w-3.5" />
-                                                Saved
+                                                <Bookmark className="h-3.5 w-3.5" /> Saved
                                             </div>
-
                                             {rating > 0 && (
                                                 <div className="absolute bottom-4 right-4 flex items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-xs font-extrabold text-[#76520a] shadow-sm backdrop-blur">
-                                                    <Star className="h-3.5 w-3.5 fill-current text-[#e5a62a]" />
+                                                    <Star className="h-3.5 w-3.5 fill-current text-[#e5a62a]" />{" "}
                                                     {rating.toFixed(1)}
                                                 </div>
                                             )}
-
                                             <div className="absolute bottom-4 left-4 max-w-[70%]">
                                                 <h3 className="text-xl font-extrabold leading-tight text-white drop-shadow-md">
                                                     {place.name}
@@ -569,67 +452,46 @@ const Mytrip = () => {
                                             {place.location && (
                                                 <div className="flex items-start gap-2 text-sm text-[#687771]">
                                                     <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#187967]" />
-
-                                                    <span className="line-clamp-1">
-                                                        {place.location}
-                                                    </span>
+                                                    <span className="line-clamp-1">{place.location}</span>
                                                 </div>
                                             )}
-
                                             {categories.length > 0 && (
                                                 <div className="mt-3 flex flex-wrap gap-1.5">
-                                                    {categories
-                                                        .slice(0, 3)
-                                                        .map((category) => (
-                                                            <span
-                                                                key={category}
-                                                                className="rounded-full bg-[#eef5f2] px-2.5 py-1 text-[10px] font-bold capitalize text-[#187967]"
-                                                            >
-                                                                {category}
-                                                            </span>
-                                                        ))}
+                                                    {categories.slice(0, 3).map((category) => (
+                                                        <span
+                                                            key={category._id}
+                                                            className="rounded-full bg-[#eef5f2] px-2.5 py-1 text-[10px] font-bold capitalize text-[#187967]"
+                                                        >
+                                                            {category.name}
+                                                        </span>
+                                                    ))}
                                                 </div>
                                             )}
-
                                             {place.description && (
                                                 <p className="mt-4 line-clamp-2 text-sm leading-6 text-[#71807c]">
                                                     {place.description}
                                                 </p>
                                             )}
-
                                             <div className="mt-5 grid grid-cols-2 gap-2.5">
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        navigate(
-                                                            `/review?tripId=${trip._id}`
-                                                        )
-                                                    }
+                                                    onClick={() => navigate(`/review?tripId=${trip._id}`)}
                                                     className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#d7e6df] bg-[#f0f8f4] px-3 py-3 text-sm font-extrabold text-[#187967] transition hover:bg-[#e3f2eb]"
                                                 >
-                                                    <Star className="h-4 w-4" />
-                                                    Review place
+                                                    <Star className="h-4 w-4" /> Review place
                                                 </button>
-
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        handleDirections(trip)
-                                                    }
+                                                    onClick={() => handleDirections(trip)}
                                                     className="group/direction inline-flex items-center justify-center gap-2 rounded-xl bg-[#187967] px-3 py-3 text-sm font-extrabold text-white transition hover:bg-[#126554]"
                                                 >
-                                                    <Navigation className="h-4 w-4 transition-transform group-hover/direction:translate-x-0.5" />
+                                                    <Navigation className="h-4 w-4 transition-transform group-hover/direction:translate-x-0.5" />{" "}
                                                     Directions
                                                 </button>
-
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        setRemoveTarget(trip)
-                                                    }
-                                                    disabled={
-                                                        removingId === placeId
-                                                    }
+                                                    onClick={() => setRemoveTarget(trip)}
+                                                    disabled={removingId === placeId}
                                                     aria-label={`Remove ${place.name}`}
                                                     className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#e0e6e3] bg-white text-[#788681] transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
@@ -659,12 +521,11 @@ const Mytrip = () => {
                 onClose={() => setRemoveTarget(null)}
                 onConfirm={handleRemove}
             />
-
             <ConfirmModal
                 open={showClearModal}
                 title="Clear your saved places?"
-                description={`This will remove all ${trips.length} saved destination${trips.length !== 1 ? "s" : ""
-                    } from My Trips. This action cannot be undone.`}
+                description={`This will remove all ${trips.length} saved 
+                destination${trips.length !== 1 ? "s" : ""} from My Trips. This action cannot be undone.`}
                 confirmText="Clear all"
                 danger
                 loading={clearing}
